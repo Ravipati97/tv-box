@@ -6,8 +6,9 @@ import EpisodeRow from '../components/EpisodeRow'
 import { EpisodeRowSkeleton } from '../components/Skeletons'
 import { backdropUrl, getSeasonDetail, getShowDetail, posterUrl, yearFromDate } from '../lib/tmdb'
 import { deleteRating, fetchAllRatingsForShow, ratingKey, splitRatingsByUser, upsertRating } from '../lib/ratings'
+import { fetchReactionsForRatings, groupReactionsByRating, toggleReaction } from '../lib/reactions'
 import { useAuth } from '../contexts/AuthContext'
-import type { CrowdMap, RatingMap, TmdbSeasonDetail, TmdbShowDetail } from '../types'
+import type { CrowdMap, RatingMap, ReactionMap, RatingReaction, TmdbSeasonDetail, TmdbShowDetail } from '../types'
 
 export default function ShowDetail() {
   const { id } = useParams<{ id: string }>()
@@ -19,6 +20,7 @@ export default function ShowDetail() {
   const [activeSeason, setActiveSeason] = useState<number | null>(null)
   const [ratings, setRatings] = useState<RatingMap>({})
   const [crowd, setCrowd] = useState<CrowdMap>({})
+  const [reactions, setReactions] = useState<ReactionMap>({})
   const [loadingShow, setLoadingShow] = useState(true)
   const [loadingSeason, setLoadingSeason] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -42,6 +44,10 @@ export default function ShowDetail() {
         setCrowd(crowdMap)
         const firstRealSeason = showData.seasons.find((s) => s.season_number > 0) ?? showData.seasons[0]
         setActiveSeason(firstRealSeason ? firstRealSeason.season_number : null)
+
+        // Reactions for every rating on this show, in one follow-up query.
+        const reactionRows = await fetchReactionsForRatings(allRatings.map((r) => r.id))
+        if (!cancelled) setReactions(groupReactionsByRating(reactionRows))
       } catch (err) {
         if (!cancelled) setError(err instanceof Error ? err.message : 'Failed to load show.')
       } finally {
@@ -119,6 +125,38 @@ export default function ShowDetail() {
       const existing = (prev[key] ?? []).filter((r) => r.user_id !== user.id)
       return { ...prev, [key]: [...existing, { ...saved, users: { username: user.username } }] }
     })
+  }
+
+  async function handleToggleReaction(ratingId: string, emoji: string) {
+    if (!user) return
+
+    // Optimistic update so the tap feels instant.
+    setReactions((prev) => {
+      const existing = prev[ratingId] ?? []
+      const mine = existing.find((r) => r.user_id === user.id)
+      const withoutMine = existing.filter((r) => r.user_id !== user.id)
+      if (mine && mine.emoji === emoji) {
+        return { ...prev, [ratingId]: withoutMine }
+      }
+      const optimistic: RatingReaction = {
+        id: mine?.id ?? `pending-${ratingId}-${user.id}`,
+        rating_id: ratingId,
+        user_id: user.id,
+        emoji,
+        created_at: new Date().toISOString(),
+      }
+      return { ...prev, [ratingId]: [...withoutMine, optimistic] }
+    })
+
+    try {
+      const result = await toggleReaction(ratingId, user.id, emoji)
+      setReactions((prev) => {
+        const withoutMine = (prev[ratingId] ?? []).filter((r) => r.user_id !== user.id)
+        return { ...prev, [ratingId]: result ? [...withoutMine, result] : withoutMine }
+      })
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to save reaction.')
+    }
   }
 
   if (Number.isNaN(showId)) {
@@ -221,8 +259,10 @@ export default function ShowDetail() {
                       episode={ep}
                       rating={ratings[ratingKey(ep.season_number, ep.episode_number)]?.rating ?? 0}
                       crowd={crowd[ratingKey(ep.season_number, ep.episode_number)] ?? []}
+                      reactionsByRatingId={reactions}
                       myUserId={user?.id ?? ''}
                       onRate={(value) => handleRate(ep.episode_number, ep.name, value)}
+                      onToggleReaction={handleToggleReaction}
                     />
                   ))}
             </div>

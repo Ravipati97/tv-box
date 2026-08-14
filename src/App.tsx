@@ -9,6 +9,7 @@ import ShowDetail from './pages/ShowDetail'
 import Profile from './pages/Profile'
 import Members from './pages/Members'
 import PublicProfile from './pages/PublicProfile'
+import Compare from './pages/Compare'
 
 function AppShell() {
   const { user, loading } = useAuth()
@@ -66,6 +67,14 @@ function AppShell() {
             element={
               <ProtectedRoute>
                 <PublicProfile />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/compare/:username"
+            element={
+              <ProtectedRoute>
+                <Compare />
               </ProtectedRoute>
             }
           />

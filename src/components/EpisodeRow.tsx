@@ -3,17 +3,28 @@ import { motion } from 'framer-motion'
 import { Link } from 'react-router-dom'
 import StarRating from './StarRating'
 import { stillUrl } from '../lib/tmdb'
-import type { EpisodeRatingWithUser, TmdbEpisode } from '../types'
+import { REACTION_EMOJI } from '../types'
+import type { EpisodeRatingWithUser, ReactionMap, TmdbEpisode } from '../types'
 
 interface EpisodeRowProps {
   episode: TmdbEpisode
   rating: number
   crowd: EpisodeRatingWithUser[]
+  reactionsByRatingId: ReactionMap
   myUserId: string
   onRate: (rating: number) => Promise<void>
+  onToggleReaction: (ratingId: string, emoji: string) => void
 }
 
-export default function EpisodeRow({ episode, rating, crowd, myUserId, onRate }: EpisodeRowProps) {
+export default function EpisodeRow({
+  episode,
+  rating,
+  crowd,
+  reactionsByRatingId,
+  myUserId,
+  onRate,
+  onToggleReaction,
+}: EpisodeRowProps) {
   const [saving, setSaving] = useState(false)
   const [expanded, setExpanded] = useState(false)
   const [showCrowd, setShowCrowd] = useState(false)
@@ -105,27 +116,34 @@ export default function EpisodeRow({ episode, rating, crowd, myUserId, onRate }:
             <motion.ul
               initial={{ opacity: 0, y: -4 }}
               animate={{ opacity: 1, y: 0 }}
-              className="mt-2 space-y-1 border-t border-white/5 pt-2"
+              className="mt-2 space-y-2.5 border-t border-white/5 pt-2.5"
             >
               {crowd
                 .slice()
                 .sort((a, b) => b.rating - a.rating)
                 .map((r) => (
-                  <li key={r.id} className="flex items-center justify-between text-xs">
-                    {r.user_id === myUserId ? (
-                      <span className="text-base-300">You</span>
-                    ) : (
-                      <Link
-                        to={`/u/${r.users?.username ?? ''}`}
-                        className="text-base-300 hover:text-accent-400"
-                      >
-                        @{r.users?.username ?? 'unknown'}
-                      </Link>
-                    )}
-                    <span className="flex items-center gap-1 text-star">
-                      {r.rating.toFixed(1)}
-                      <StarGlyph />
-                    </span>
+                  <li key={r.id} className="space-y-1">
+                    <div className="flex items-center justify-between text-xs">
+                      {r.user_id === myUserId ? (
+                        <span className="text-base-300">You</span>
+                      ) : (
+                        <Link
+                          to={`/u/${r.users?.username ?? ''}`}
+                          className="text-base-300 hover:text-accent-400"
+                        >
+                          @{r.users?.username ?? 'unknown'}
+                        </Link>
+                      )}
+                      <span className="flex items-center gap-1 text-star">
+                        {r.rating.toFixed(1)}
+                        <StarGlyph />
+                      </span>
+                    </div>
+                    <ReactionBar
+                      reactions={reactionsByRatingId[r.id] ?? []}
+                      myUserId={myUserId}
+                      onPick={(emoji) => onToggleReaction(r.id, emoji)}
+                    />
                   </li>
                 ))}
             </motion.ul>
@@ -133,6 +151,43 @@ export default function EpisodeRow({ episode, rating, crowd, myUserId, onRate }:
         </div>
       </div>
     </motion.div>
+  )
+}
+
+function ReactionBar({
+  reactions,
+  myUserId,
+  onPick,
+}: {
+  reactions: { user_id: string; emoji: string }[]
+  myUserId: string
+  onPick: (emoji: string) => void
+}) {
+  return (
+    <div className="flex items-center gap-1">
+      {REACTION_EMOJI.map((emoji) => {
+        const matches = reactions.filter((r) => r.emoji === emoji)
+        const mine = matches.some((r) => r.user_id === myUserId)
+        const count = matches.length
+        return (
+          <button
+            key={emoji}
+            type="button"
+            onClick={() => onPick(emoji)}
+            className={`flex items-center gap-0.5 rounded-full border px-1.5 py-0.5 text-[11px] leading-none transition-colors duration-150 ${
+              mine
+                ? 'border-accent-500/50 bg-accent-500/15'
+                : count > 0
+                  ? 'border-white/10 bg-white/5 hover:border-white/20'
+                  : 'border-transparent opacity-40 hover:opacity-80'
+            }`}
+          >
+            <span>{emoji}</span>
+            {count > 0 && <span className="text-base-300">{count}</span>}
+          </button>
+        )
+      })}
+    </div>
   )
 }
 

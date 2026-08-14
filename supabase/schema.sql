@@ -74,3 +74,42 @@ drop policy if exists "Anyone can delete ratings" on public.episode_ratings;
 create policy "Anyone can delete ratings"
   on public.episode_ratings for delete
   using (true);
+
+-- One quick emoji reaction per person per rating (e.g. react to a friend's
+-- 5-star Severance rating with 🔥). Re-reacting with the same emoji removes
+-- it; reacting with a different emoji swaps it -- enforced in the app, not
+-- the database, so the unique constraint just caps it at one row per pair.
+create table if not exists public.rating_reactions (
+  id uuid primary key default gen_random_uuid(),
+  rating_id uuid not null references public.episode_ratings(id) on delete cascade,
+  user_id uuid not null references public.users(id) on delete cascade,
+  emoji text not null,
+  created_at timestamptz not null default now(),
+
+  unique (rating_id, user_id)
+);
+
+create index if not exists rating_reactions_rating_id_idx on public.rating_reactions (rating_id);
+
+alter table public.rating_reactions enable row level security;
+
+drop policy if exists "Anyone can read reactions" on public.rating_reactions;
+create policy "Anyone can read reactions"
+  on public.rating_reactions for select
+  using (true);
+
+drop policy if exists "Anyone can insert reactions" on public.rating_reactions;
+create policy "Anyone can insert reactions"
+  on public.rating_reactions for insert
+  with check (true);
+
+drop policy if exists "Anyone can update reactions" on public.rating_reactions;
+create policy "Anyone can update reactions"
+  on public.rating_reactions for update
+  using (true)
+  with check (true);
+
+drop policy if exists "Anyone can delete reactions" on public.rating_reactions;
+create policy "Anyone can delete reactions"
+  on public.rating_reactions for delete
+  using (true);

@@ -77,12 +77,19 @@ export default function PublicProfile() {
             </h1>
           )}
         </div>
-        {isMe && (
+        {isMe ? (
           <Link
             to="/profile"
             className="rounded-lg border border-white/10 px-3.5 py-2 text-sm text-base-300 transition-colors duration-200 hover:border-accent-500/40 hover:text-accent-400"
           >
             Edit / sign out
+          </Link>
+        ) : (
+          <Link
+            to={`/compare/${username}`}
+            className="rounded-lg border border-white/10 px-3.5 py-2 text-sm text-base-300 transition-colors duration-200 hover:border-accent-500/40 hover:text-accent-400"
+          >
+            Compare ratings
           </Link>
         )}
       </div>

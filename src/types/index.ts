@@ -82,3 +82,17 @@ export interface EpisodeRatingWithUser extends EpisodeRating {
 
 /** Keyed lookup: "season-episode" -> every rating (any user) for that episode */
 export type CrowdMap = Record<string, EpisodeRatingWithUser[]>
+
+export const REACTION_EMOJI = ['🔥', '😂', '😭', '💀'] as const
+export type ReactionEmoji = (typeof REACTION_EMOJI)[number]
+
+export interface RatingReaction {
+  id: string
+  rating_id: string
+  user_id: string
+  emoji: string
+  created_at: string
+}
+
+/** Keyed lookup: episode_ratings.id -> every reaction on that rating */
+export type ReactionMap = Record<string, RatingReaction[]>
