@@ -15,3 +15,5 @@ Letterboxd, but for TV shows — search a show, rate it episode by episode.
 - **Profile** — your own diary of everything you've rated, with stats.
 
 Sign-in has no password or verification, so anyone who knows your email could sign in as you — fine for a small group of friends, not for anything sensitive.
+
+If a passcode gate is enabled, you'll be asked for a shared code before you can reach the sign-in screen at all — ask whoever set up the site for it.

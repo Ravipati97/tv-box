@@ -1,8 +1,11 @@
+import { useState } from 'react'
 import { HashRouter, Navigate, Route, Routes, useLocation } from 'react-router-dom'
 import { AnimatePresence } from 'framer-motion'
 import { AuthProvider, useAuth } from './contexts/AuthContext'
 import ProtectedRoute from './components/ProtectedRoute'
 import Navbar from './components/Navbar'
+import PasscodeGate from './components/PasscodeGate'
+import { hasPassedGate, isGateConfigured } from './lib/siteGate'
 import Login from './pages/Login'
 import Search from './pages/Search'
 import ShowDetail from './pages/ShowDetail'
@@ -15,6 +18,7 @@ function AppShell() {
   const { user, loading } = useAuth()
   const location = useLocation()
   const showNav = Boolean(user) && location.pathname !== '/login'
+  const [gatePassed, setGatePassed] = useState(hasPassedGate)
 
   if (loading) {
     return (
@@ -22,6 +26,12 @@ function AppShell() {
         <div className="h-8 w-8 animate-spin rounded-full border-2 border-base-700 border-t-accent-400" />
       </div>
     )
+  }
+
+  // Unauthenticated visitors have to clear the shared passcode before they
+  // can even see the login/registration screen, for any URL they land on.
+  if (!user && isGateConfigured && !gatePassed) {
+    return <PasscodeGate onSuccess={() => setGatePassed(true)} />
   }
 
   return (
