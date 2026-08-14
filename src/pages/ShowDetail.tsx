@@ -170,12 +170,12 @@ export default function ShowDetail() {
   return (
     <div className="pb-24 md:pb-10">
       {/* Hero */}
-      <div className="relative h-56 w-full overflow-hidden sm:h-72 md:h-80">
+      <div className="relative h-56 w-full overflow-hidden sm:h-auto sm:aspect-[3/1] sm:max-h-[520px]">
         {show?.backdrop_path ? (
           <img
             src={backdropUrl(show.backdrop_path) ?? undefined}
             alt=""
-            className="h-full w-full object-cover object-top"
+            className="h-full w-full object-cover"
           />
         ) : (
           <div className="h-full w-full bg-base-850" />
@@ -190,7 +190,7 @@ export default function ShowDetail() {
               <img
                 src={posterUrl(show.poster_path) ?? undefined}
                 alt={show.name}
-                className="h-full w-full object-cover object-top"
+                className="h-full w-full object-cover"
               />
             )}
           </div>
