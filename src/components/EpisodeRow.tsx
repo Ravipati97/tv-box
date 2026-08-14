@@ -97,17 +97,23 @@ export default function EpisodeRow({
             {saving && (
               <span className="h-3 w-3 animate-spin rounded-full border-2 border-base-600 border-t-accent-400" />
             )}
-            {othersAvg !== null && (
+            {crowd.length > 0 && (
               <button
                 type="button"
                 onClick={() => setShowCrowd((v) => !v)}
                 className="flex items-center gap-1 text-xs text-base-400 hover:text-base-200"
               >
-                <StarGlyph />
-                {othersAvg.toFixed(1)}
-                <span className="text-base-500">
-                  ({others.length} {others.length === 1 ? 'other rating' : 'other ratings'})
-                </span>
+                {othersAvg !== null ? (
+                  <>
+                    <StarGlyph />
+                    {othersAvg.toFixed(1)}
+                    <span className="text-base-500">
+                      ({others.length} {others.length === 1 ? 'other rating' : 'other ratings'})
+                    </span>
+                  </>
+                ) : (
+                  <span className="text-base-500">Add a reaction</span>
+                )}
               </button>
             )}
           </div>
