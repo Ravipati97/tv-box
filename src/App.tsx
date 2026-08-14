@@ -7,6 +7,8 @@ import Login from './pages/Login'
 import Search from './pages/Search'
 import ShowDetail from './pages/ShowDetail'
 import Profile from './pages/Profile'
+import Members from './pages/Members'
+import PublicProfile from './pages/PublicProfile'
 
 function AppShell() {
   const { user, loading } = useAuth()
@@ -48,6 +50,22 @@ function AppShell() {
             element={
               <ProtectedRoute>
                 <Profile />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/members"
+            element={
+              <ProtectedRoute>
+                <Members />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/u/:username"
+            element={
+              <ProtectedRoute>
+                <PublicProfile />
               </ProtectedRoute>
             }
           />

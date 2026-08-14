@@ -5,9 +5,9 @@ import SeasonTabs from '../components/SeasonTabs'
 import EpisodeRow from '../components/EpisodeRow'
 import { EpisodeRowSkeleton } from '../components/Skeletons'
 import { backdropUrl, getSeasonDetail, getShowDetail, posterUrl, yearFromDate } from '../lib/tmdb'
-import { deleteRating, fetchRatingsForShow, ratingKey, upsertRating } from '../lib/ratings'
+import { deleteRating, fetchAllRatingsForShow, ratingKey, splitRatingsByUser, upsertRating } from '../lib/ratings'
 import { useAuth } from '../contexts/AuthContext'
-import type { RatingMap, TmdbSeasonDetail, TmdbShowDetail } from '../types'
+import type { CrowdMap, RatingMap, TmdbSeasonDetail, TmdbShowDetail } from '../types'
 
 export default function ShowDetail() {
   const { id } = useParams<{ id: string }>()
@@ -18,11 +18,12 @@ export default function ShowDetail() {
   const [season, setSeason] = useState<TmdbSeasonDetail | null>(null)
   const [activeSeason, setActiveSeason] = useState<number | null>(null)
   const [ratings, setRatings] = useState<RatingMap>({})
+  const [crowd, setCrowd] = useState<CrowdMap>({})
   const [loadingShow, setLoadingShow] = useState(true)
   const [loadingSeason, setLoadingSeason] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
-  // Load show detail + user's ratings for this show.
+  // Load show detail + everyone's ratings for this show (mine + the crowd's).
   useEffect(() => {
     let cancelled = false
     setLoadingShow(true)
@@ -30,13 +31,15 @@ export default function ShowDetail() {
 
     async function load() {
       try {
-        const [showData, ratingData] = await Promise.all([
+        const [showData, allRatings] = await Promise.all([
           getShowDetail(showId),
-          user ? fetchRatingsForShow(user.id, showId) : Promise.resolve({}),
+          fetchAllRatingsForShow(showId),
         ])
         if (cancelled) return
         setShow(showData)
-        setRatings(ratingData)
+        const { mine, crowd: crowdMap } = splitRatingsByUser(allRatings, user?.id ?? '')
+        setRatings(mine)
+        setCrowd(crowdMap)
         const firstRealSeason = showData.seasons.find((s) => s.season_number > 0) ?? showData.seasons[0]
         setActiveSeason(firstRealSeason ? firstRealSeason.season_number : null)
       } catch (err) {
@@ -93,6 +96,10 @@ export default function ShowDetail() {
         delete next[key]
         return next
       })
+      setCrowd((prev) => ({
+        ...prev,
+        [key]: (prev[key] ?? []).filter((r) => r.user_id !== user.id),
+      }))
       await deleteRating(user.id, show.id, activeSeason, episodeNumber)
       return
     }
@@ -108,6 +115,10 @@ export default function ShowDetail() {
       rating: value,
     })
     setRatings((prev) => ({ ...prev, [key]: saved }))
+    setCrowd((prev) => {
+      const existing = (prev[key] ?? []).filter((r) => r.user_id !== user.id)
+      return { ...prev, [key]: [...existing, { ...saved, users: { username: user.username } }] }
+    })
   }
 
   if (Number.isNaN(showId)) {
@@ -209,6 +220,8 @@ export default function ShowDetail() {
                       key={ep.id}
                       episode={ep}
                       rating={ratings[ratingKey(ep.season_number, ep.episode_number)]?.rating ?? 0}
+                      crowd={crowd[ratingKey(ep.season_number, ep.episode_number)] ?? []}
+                      myUserId={user?.id ?? ''}
                       onRate={(value) => handleRate(ep.episode_number, ep.name, value)}
                     />
                   ))}

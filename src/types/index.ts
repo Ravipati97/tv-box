@@ -74,3 +74,11 @@ export interface EpisodeRating {
 
 /** Keyed lookup: "season-episode" -> rating value */
 export type RatingMap = Record<string, EpisodeRating>
+
+/** An episode_ratings row joined with the rater's username (crowd view). */
+export interface EpisodeRatingWithUser extends EpisodeRating {
+  users: { username: string } | null
+}
+
+/** Keyed lookup: "season-episode" -> every rating (any user) for that episode */
+export type CrowdMap = Record<string, EpisodeRatingWithUser[]>

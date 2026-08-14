@@ -21,6 +21,26 @@ function SearchIcon({ active }: { active: boolean }) {
   )
 }
 
+function PeopleIcon({ active }: { active: boolean }) {
+  return (
+    <svg
+      width="21"
+      height="21"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke={active ? 'var(--color-accent-400)' : 'currentColor'}
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <circle cx="9" cy="8" r="3.2" />
+      <path d="M2.5 20c1.2-3.4 4-5.2 6.5-5.2s5.3 1.8 6.5 5.2" />
+      <path d="M16 8.2a3 3 0 1 1 3.2 3" />
+      <path d="M15.5 14.9c2.1.3 4 1.8 4.9 5.1" />
+    </svg>
+  )
+}
+
 function UserIcon({ active }: { active: boolean }) {
   return (
     <svg
@@ -71,6 +91,19 @@ export default function Navbar() {
               )}
             </NavLink>
             <NavLink
+              to="/members"
+              className={({ isActive }) =>
+                `${linkBase} ${isActive ? 'bg-white/5 text-base-100' : 'text-base-400 hover:text-base-100'}`
+              }
+            >
+              {({ isActive }) => (
+                <>
+                  <PeopleIcon active={isActive} />
+                  Members
+                </>
+              )}
+            </NavLink>
+            <NavLink
               to="/profile"
               className={({ isActive }) =>
                 `${linkBase} ${isActive ? 'bg-white/5 text-base-100' : 'text-base-400 hover:text-base-100'}`
@@ -104,6 +137,19 @@ export default function Navbar() {
             <>
               <SearchIcon active={isActive} />
               Search
+            </>
+          )}
+        </NavLink>
+        <NavLink
+          to="/members"
+          className={({ isActive }) =>
+            `${linkBase} flex-1 py-2.5 ${isActive ? 'text-base-100' : 'text-base-400'}`
+          }
+        >
+          {({ isActive }) => (
+            <>
+              <PeopleIcon active={isActive} />
+              Members
             </>
           )}
         </NavLink>

@@ -1,19 +1,27 @@
 import { useState } from 'react'
 import { motion } from 'framer-motion'
+import { Link } from 'react-router-dom'
 import StarRating from './StarRating'
 import { stillUrl } from '../lib/tmdb'
-import type { TmdbEpisode } from '../types'
+import type { EpisodeRatingWithUser, TmdbEpisode } from '../types'
 
 interface EpisodeRowProps {
   episode: TmdbEpisode
   rating: number
+  crowd: EpisodeRatingWithUser[]
+  myUserId: string
   onRate: (rating: number) => Promise<void>
 }
 
-export default function EpisodeRow({ episode, rating, onRate }: EpisodeRowProps) {
+export default function EpisodeRow({ episode, rating, crowd, myUserId, onRate }: EpisodeRowProps) {
   const [saving, setSaving] = useState(false)
   const [expanded, setExpanded] = useState(false)
+  const [showCrowd, setShowCrowd] = useState(false)
   const still = stillUrl(episode.still_path)
+
+  const others = crowd.filter((r) => r.user_id !== myUserId)
+  const othersAvg =
+    others.length > 0 ? others.reduce((sum, r) => sum + r.rating, 0) / others.length : null
 
   async function handleChange(value: number) {
     setSaving(true)
@@ -73,14 +81,65 @@ export default function EpisodeRow({ episode, rating, onRate }: EpisodeRowProps)
             {episode.overview || 'No synopsis available.'}
           </p>
 
-          <div className="mt-2.5 flex items-center gap-2 sm:mt-3">
+          <div className="mt-2.5 flex flex-wrap items-center gap-x-3 gap-y-1.5 sm:mt-3">
             <StarRating value={rating} onChange={handleChange} size="sm" />
             {saving && (
               <span className="h-3 w-3 animate-spin rounded-full border-2 border-base-600 border-t-accent-400" />
             )}
+            {othersAvg !== null && (
+              <button
+                type="button"
+                onClick={() => setShowCrowd((v) => !v)}
+                className="flex items-center gap-1 text-xs text-base-400 hover:text-base-200"
+              >
+                <StarGlyph />
+                {othersAvg.toFixed(1)}
+                <span className="text-base-500">
+                  ({others.length} {others.length === 1 ? 'other rating' : 'other ratings'})
+                </span>
+              </button>
+            )}
           </div>
+
+          {showCrowd && crowd.length > 0 && (
+            <motion.ul
+              initial={{ opacity: 0, y: -4 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="mt-2 space-y-1 border-t border-white/5 pt-2"
+            >
+              {crowd
+                .slice()
+                .sort((a, b) => b.rating - a.rating)
+                .map((r) => (
+                  <li key={r.id} className="flex items-center justify-between text-xs">
+                    {r.user_id === myUserId ? (
+                      <span className="text-base-300">You</span>
+                    ) : (
+                      <Link
+                        to={`/u/${r.users?.username ?? ''}`}
+                        className="text-base-300 hover:text-accent-400"
+                      >
+                        @{r.users?.username ?? 'unknown'}
+                      </Link>
+                    )}
+                    <span className="flex items-center gap-1 text-star">
+                      {r.rating.toFixed(1)}
+                      <StarGlyph />
+                    </span>
+                  </li>
+                ))}
+            </motion.ul>
+          )}
         </div>
       </div>
     </motion.div>
+  )
+}
+
+function StarGlyph() {
+  return (
+    <svg width="11" height="11" viewBox="0 0 24 24" fill="var(--color-star)">
+      <path d="M12 2.5l2.9 6.15 6.6.72-4.95 4.6 1.3 6.53L12 17.3l-5.85 3.2 1.3-6.53-4.95-4.6 6.6-.72L12 2.5z" />
+    </svg>
   )
 }

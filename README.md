@@ -76,10 +76,13 @@ If you ever rename the repository, update `base: '/tv-box/'` in `vite.config.ts`
 - Lightweight sign-in: enter an email — new users pick a username, returning users are straight in. No password, no verification (see "About sign-in" above).
 - Search any TV show (TMDB).
 - Per-episode 5-star rating (half-star precision) — click the same rating again to clear it.
-- Profile page: a diary of everything you've rated, with quick stats (episodes rated, shows, average rating).
+- Crowd ratings: every episode also shows the average from everyone else who's rated it, with an expandable "who rated what" list.
+- Members directory (`/members`) — everyone who's registered, searchable by username.
+- Public profiles (`/u/username`) — anyone's diary + stats, read-only.
+- Your own profile page: a diary of everything you've rated, with quick stats (episodes rated, shows, average rating).
 - Fully responsive: bottom tab bar on mobile, top nav on desktop. Dark mode only.
 
-Not included by design (per the original scope): recommendations, trending, social/follow features, reviews/comments, watchlists. All straightforward to add later on top of the same `episode_ratings` table / Supabase project.
+Not included by design (per the original scope): recommendations, trending, reviews/comments, watchlists, and any notion of "following" (everyone can already see everyone — see "About sign-in"). All straightforward to add later on top of the same tables.
 
 ## Project structure
 
@@ -87,8 +90,8 @@ Not included by design (per the original scope): recommendations, trending, soci
 src/
   components/     StarRating, ShowCard, EpisodeRow, Navbar, SeasonTabs, skeleton loaders
   contexts/       AuthContext (email + username sign-in, session kept in localStorage)
-  lib/            supabase.ts, tmdb.ts, ratings.ts (all Supabase/TMDB calls live here)
-  pages/          Login, Search, ShowDetail, Profile
+  lib/            supabase.ts, tmdb.ts, ratings.ts, users.ts (all Supabase/TMDB calls live here)
+  pages/          Login, Search, ShowDetail, Profile, Members, PublicProfile
 supabase/
   schema.sql      Run once in the Supabase SQL editor
 .github/workflows/

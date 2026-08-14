@@ -1,24 +1,39 @@
 import { supabase } from './supabase'
-import type { EpisodeRating, RatingMap } from '../types'
+import type { CrowdMap, EpisodeRating, EpisodeRatingWithUser, RatingMap } from '../types'
 
 export function ratingKey(seasonNumber: number, episodeNumber: number): string {
   return `${seasonNumber}-${episodeNumber}`
 }
 
-export async function fetchRatingsForShow(userId: string, showId: number): Promise<RatingMap> {
+/**
+ * Every rating (from every user) for a given show, joined with each rater's
+ * username. Used to show both "my" rating and the crowd's ratings on each
+ * episode row in one query.
+ */
+export async function fetchAllRatingsForShow(showId: number): Promise<EpisodeRatingWithUser[]> {
   const { data, error } = await supabase
     .from('episode_ratings')
-    .select('*')
-    .eq('user_id', userId)
+    .select('*, users(username)')
     .eq('show_id', showId)
 
   if (error) throw error
+  return (data ?? []) as unknown as EpisodeRatingWithUser[]
+}
 
-  const map: RatingMap = {}
-  for (const row of (data ?? []) as EpisodeRating[]) {
-    map[ratingKey(row.season_number, row.episode_number)] = row
+/** Splits an all-users rating list into "my ratings" (RatingMap) + "everyone's ratings" (CrowdMap). */
+export function splitRatingsByUser(
+  rows: EpisodeRatingWithUser[],
+  myUserId: string,
+): { mine: RatingMap; crowd: CrowdMap } {
+  const mine: RatingMap = {}
+  const crowd: CrowdMap = {}
+  for (const row of rows) {
+    const key = ratingKey(row.season_number, row.episode_number)
+    if (row.user_id === myUserId) mine[key] = row
+    if (!crowd[key]) crowd[key] = []
+    crowd[key].push(row)
   }
-  return map
+  return { mine, crowd }
 }
 
 export async function fetchRecentRatings(userId: string, limit = 60): Promise<EpisodeRating[]> {

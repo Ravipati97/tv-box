@@ -1,70 +1,90 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useParams } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import { useAuth } from '../contexts/AuthContext'
 import { fetchRecentRatings } from '../lib/ratings'
+import { fetchUserByUsername } from '../lib/users'
 import { posterUrl } from '../lib/tmdb'
-import type { EpisodeRating } from '../types'
+import type { AppUser, EpisodeRating } from '../types'
 
-export default function Profile() {
-  const { user, signOut } = useAuth()
+export default function PublicProfile() {
+  const { username } = useParams<{ username: string }>()
+  const { user: me } = useAuth()
+  const [profile, setProfile] = useState<AppUser | null | undefined>(undefined) // undefined = loading
   const [ratings, setRatings] = useState<EpisodeRating[]>([])
-  const [loading, setLoading] = useState(true)
+  const [loadingRatings, setLoadingRatings] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
-    if (!user) return
+    if (!username) return
     let cancelled = false
-    fetchRecentRatings(user.id)
-      .then((data) => {
-        if (!cancelled) setRatings(data)
+    setProfile(undefined)
+    setLoadingRatings(true)
+
+    fetchUserByUsername(username)
+      .then(async (found) => {
+        if (cancelled) return
+        setProfile(found)
+        if (found) {
+          const data = await fetchRecentRatings(found.id)
+          if (!cancelled) setRatings(data)
+        }
       })
       .catch((err) => {
-        if (!cancelled) setError(err instanceof Error ? err.message : 'Failed to load ratings.')
+        if (!cancelled) setError(err instanceof Error ? err.message : 'Failed to load profile.')
       })
       .finally(() => {
-        if (!cancelled) setLoading(false)
+        if (!cancelled) setLoadingRatings(false)
       })
+
     return () => {
       cancelled = true
     }
-  }, [user])
+  }, [username])
 
   const stats = useMemo(() => {
     const totalEpisodes = ratings.length
     const showIds = new Set(ratings.map((r) => r.show_id))
-    const avg =
-      totalEpisodes === 0
-        ? null
-        : ratings.reduce((sum, r) => sum + r.rating, 0) / totalEpisodes
+    const avg = totalEpisodes === 0 ? null : ratings.reduce((sum, r) => sum + r.rating, 0) / totalEpisodes
     return { totalEpisodes, totalShows: showIds.size, avg }
   }, [ratings])
+
+  if (profile === null) {
+    return (
+      <div className="mx-auto max-w-3xl px-4 pb-24 pt-16 text-center sm:px-6">
+        <p className="text-sm text-base-500">No member found with username “{username}”.</p>
+        <Link to="/members" className="mt-3 inline-block text-sm text-accent-400 hover:underline">
+          &larr; Back to members
+        </Link>
+      </div>
+    )
+  }
+
+  const isMe = me?.username === username
 
   return (
     <div className="mx-auto max-w-3xl px-4 pb-24 pt-6 sm:px-6 md:pb-10">
       <div className="mb-8 flex items-center justify-between">
         <div>
-          <p className="text-xs uppercase tracking-wide text-base-500">Signed in as</p>
-          <h1 className="font-display text-lg font-semibold text-base-100 sm:text-xl">
-            @{user?.username}
-          </h1>
-          <p className="text-xs text-base-500">{user?.email}</p>
+          <p className="text-xs uppercase tracking-wide text-base-500">
+            {isMe ? 'This is you' : 'Member'}
+          </p>
+          {profile === undefined ? (
+            <div className="mt-1 h-6 w-32 animate-pulse rounded bg-base-800" />
+          ) : (
+            <h1 className="font-display text-lg font-semibold text-base-100 sm:text-xl">
+              @{profile.username}
+            </h1>
+          )}
         </div>
-        <div className="flex items-center gap-2">
+        {isMe && (
           <Link
-            to={`/u/${user?.username}`}
+            to="/profile"
             className="rounded-lg border border-white/10 px-3.5 py-2 text-sm text-base-300 transition-colors duration-200 hover:border-accent-500/40 hover:text-accent-400"
           >
-            Public view
+            Edit / sign out
           </Link>
-          <button
-            type="button"
-            onClick={() => signOut()}
-            className="rounded-lg border border-white/10 px-3.5 py-2 text-sm text-base-300 transition-colors duration-200 hover:border-red-500/40 hover:text-red-400"
-          >
-            Sign out
-          </button>
-        </div>
+        )}
       </div>
 
       <div className="mb-8 grid grid-cols-3 gap-3">
@@ -77,23 +97,14 @@ export default function Profile() {
 
       {error && <p className="mb-4 text-sm text-red-400">{error}</p>}
 
-      {loading ? (
+      {loadingRatings ? (
         <div className="space-y-2">
           {Array.from({ length: 5 }).map((_, i) => (
             <div key={i} className="h-16 animate-pulse rounded-xl bg-base-850/70" />
           ))}
         </div>
       ) : ratings.length === 0 ? (
-        <div className="mt-10 flex flex-col items-center text-center">
-          <div className="mb-3 text-4xl">⭐</div>
-          <p className="text-sm text-base-500">
-            No ratings yet.{' '}
-            <Link to="/search" className="text-accent-400 hover:underline">
-              Find a show
-            </Link>{' '}
-            to get started.
-          </p>
-        </div>
+        <p className="mt-10 text-center text-sm text-base-500">No ratings yet.</p>
       ) : (
         <ul className="space-y-2">
           {ratings.map((r, i) => (
