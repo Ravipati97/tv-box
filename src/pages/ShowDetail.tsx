@@ -170,23 +170,13 @@ export default function ShowDetail() {
   return (
     <div className="pb-24 md:pb-10">
       {/* Hero */}
-      <div className="relative h-56 w-full overflow-hidden bg-base-900 sm:h-72 md:h-80">
+      <div className="relative h-56 w-full overflow-hidden sm:h-72 md:h-80">
         {show?.backdrop_path ? (
-          <>
-            {/* Blurred, full-bleed copy for atmosphere -- fills the frame regardless of the source image's aspect ratio. */}
-            <img
-              src={backdropUrl(show.backdrop_path) ?? undefined}
-              alt=""
-              aria-hidden="true"
-              className="absolute inset-0 h-full w-full scale-110 object-cover object-center opacity-60 blur-2xl"
-            />
-            {/* Sharp copy, letterboxed -- never crops into faces no matter how the backdrop is composed. */}
-            <img
-              src={backdropUrl(show.backdrop_path) ?? undefined}
-              alt=""
-              className="absolute inset-0 h-full w-full object-contain"
-            />
-          </>
+          <img
+            src={backdropUrl(show.backdrop_path) ?? undefined}
+            alt=""
+            className="h-full w-full object-cover object-top"
+          />
         ) : (
           <div className="h-full w-full bg-base-850" />
         )}
@@ -200,7 +190,7 @@ export default function ShowDetail() {
               <img
                 src={posterUrl(show.poster_path) ?? undefined}
                 alt={show.name}
-                className="h-full w-full object-cover"
+                className="h-full w-full object-cover object-top"
               />
             )}
           </div>
