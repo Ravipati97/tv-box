@@ -1,0 +1,101 @@
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Inter", ui-sans-serif, system-ui, -apple-system, sans-serif;
+  --font-display: "Fraunces", ui-serif, Georgia, serif;
+
+  /* Base (dark) surface scale */
+  --color-base-950: #08080c;
+  --color-base-900: #0d0d12;
+  --color-base-850: #131318;
+  --color-base-800: #191921;
+  --color-base-750: #1e1e27;
+  --color-base-700: #26262f;
+  --color-base-600: #3a3a46;
+  --color-base-500: #55555f;
+  --color-base-400: #858593;
+  --color-base-300: #a3a3ae;
+  --color-base-200: #cfcfd8;
+  --color-base-100: #ececf1;
+
+  /* Accent (violet) */
+  --color-accent-300: #c4b5fd;
+  --color-accent-400: #a78bfa;
+  --color-accent-500: #8b5cf6;
+  --color-accent-600: #7c3aed;
+  --color-accent-700: #6d28d9;
+
+  /* Rating gold */
+  --color-star: #ffb020;
+  --color-star-dim: #4a3a1f;
+
+  --animate-fade-in: fade-in 0.35s ease-out both;
+  --animate-rise: rise 0.4s cubic-bezier(0.16, 1, 0.3, 1) both;
+
+  @keyframes fade-in {
+    from { opacity: 0; }
+    to { opacity: 1; }
+  }
+  @keyframes rise {
+    from { opacity: 0; transform: translateY(10px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+}
+
+html {
+  color-scheme: dark;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  background-color: var(--color-base-950);
+  background-image:
+    radial-gradient(ellipse 80% 50% at 50% -10%, rgba(139, 92, 246, 0.12), transparent);
+  background-attachment: fixed;
+  color: var(--color-base-200);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+* {
+  scrollbar-color: var(--color-base-600) transparent;
+  scrollbar-width: thin;
+}
+
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background-color: var(--color-base-600);
+  border-radius: 999px;
+}
+
+input,
+button {
+  font-family: inherit;
+}
+
+/* Remove number spinners / focus rings we don't want, keep accessible focus otherwise */
+:focus-visible {
+  outline: 2px solid var(--color-accent-400);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
