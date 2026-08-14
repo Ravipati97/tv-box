@@ -107,7 +107,7 @@ export default function Login() {
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
                     placeholder="you@gmail.com"
-                    className="w-full rounded-lg border border-white/10 bg-base-900 px-3.5 py-2.5 text-sm text-base-100 placeholder:text-base-500 focus:border-accent-500/60"
+                    className="w-full rounded-lg border border-white/10 bg-base-900 px-3.5 py-2.5 text-base text-base-100 placeholder:text-base-500 focus:border-accent-500/60 sm:text-sm"
                   />
                 </div>
                 {error && <p className="text-xs text-red-400">{error}</p>}
@@ -146,7 +146,7 @@ export default function Login() {
                     value={username}
                     onChange={(e) => setUsername(e.target.value)}
                     placeholder="username"
-                    className="mt-3 w-full rounded-lg border border-white/10 bg-base-900 px-3.5 py-2.5 text-sm text-base-100 placeholder:text-base-500 focus:border-accent-500/60"
+                    className="mt-3 w-full rounded-lg border border-white/10 bg-base-900 px-3.5 py-2.5 text-base text-base-100 placeholder:text-base-500 focus:border-accent-500/60 sm:text-sm"
                   />
                 </div>
                 {error && <p className="text-xs text-red-400">{error}</p>}

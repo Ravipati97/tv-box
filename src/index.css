@@ -81,6 +81,18 @@ button {
   font-family: inherit;
 }
 
+/* iOS Safari auto-zooms the page on focus if an input's font-size is under
+   16px. Force a safe minimum on small screens (components still use
+   sm:text-sm etc. to look right on the size they were designed for above
+   that breakpoint) so focusing a field never triggers that zoom. */
+@media (max-width: 639px) {
+  input,
+  select,
+  textarea {
+    font-size: 16px;
+  }
+}
+
 /* Remove number spinners / focus rings we don't want, keep accessible focus otherwise */
 :focus-visible {
   outline: 2px solid var(--color-accent-400);

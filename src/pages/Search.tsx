@@ -83,7 +83,7 @@ export default function Search() {
           onChange={(e) => setQuery(e.target.value)}
           placeholder="Search for a TV show…"
           autoFocus
-          className="w-full rounded-xl border border-white/10 bg-base-850 py-3 pl-10 pr-4 text-sm text-base-100 placeholder:text-base-500 transition-colors duration-200 focus:border-accent-500/60"
+          className="w-full rounded-xl border border-white/10 bg-base-850 py-3 pl-10 pr-4 text-base text-base-100 placeholder:text-base-500 transition-colors duration-200 focus:border-accent-500/60 sm:text-sm"
         />
       </div>
 
