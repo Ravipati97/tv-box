@@ -32,11 +32,6 @@ export default function ShowCard({ show }: { show: TmdbShowSummary }) {
             </div>
           )}
           <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/70 via-black/0 to-black/0 opacity-0 transition-opacity duration-300 group-hover:opacity-100" />
-          {show.vote_average > 0 && (
-            <div className="absolute right-1.5 top-1.5 rounded-full bg-black/70 px-1.5 py-0.5 text-[10px] font-semibold text-star backdrop-blur-sm">
-              {show.vote_average.toFixed(1)}
-            </div>
-          )}
         </div>
         <p className="mt-2 truncate text-sm font-medium text-base-100">{show.name}</p>
         {year && <p className="text-xs text-base-400">{year}</p>}
