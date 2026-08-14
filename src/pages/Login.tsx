@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import type { FormEvent } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
 import { Navigate } from 'react-router-dom'
@@ -7,6 +7,25 @@ import { isSupabaseConfigured } from '../lib/supabase'
 
 type Step = 'email' | 'username'
 
+/**
+ * Focuses the input on mount, but only on devices with a precise pointer
+ * (i.e. desktop with a mouse). Auto-focusing on touch devices pops the
+ * on-screen keyboard immediately on page load, which on mobile browsers can
+ * cause the layout to shift/zoom unexpectedly before the user has done
+ * anything -- so we skip it there and let people tap in themselves.
+ */
+function useDesktopAutoFocus(active: boolean) {
+  const ref = useRef<HTMLInputElement>(null)
+  useEffect(() => {
+    if (!active) return
+    if (typeof window === 'undefined' || !window.matchMedia) return
+    if (window.matchMedia('(pointer: fine)').matches) {
+      ref.current?.focus()
+    }
+  }, [active])
+  return ref
+}
+
 export default function Login() {
   const { user, findByEmail, register, signIn } = useAuth()
   const [step, setStep] = useState<Step>('email')
@@ -14,6 +33,8 @@ export default function Login() {
   const [username, setUsername] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
+  const emailInputRef = useDesktopAutoFocus(step === 'email')
+  const usernameInputRef = useDesktopAutoFocus(step === 'username')
 
   if (user) return <Navigate to="/search" replace />
 
@@ -101,9 +122,9 @@ export default function Login() {
                   </label>
                   <input
                     id="email"
+                    ref={emailInputRef}
                     type="email"
                     autoComplete="email"
-                    autoFocus
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
                     placeholder="you@gmail.com"
@@ -140,9 +161,9 @@ export default function Login() {
                   </p>
                   <input
                     id="username"
+                    ref={usernameInputRef}
                     type="text"
                     autoComplete="username"
-                    autoFocus
                     value={username}
                     onChange={(e) => setUsername(e.target.value)}
                     placeholder="username"
