@@ -46,21 +46,17 @@ html {
   color-scheme: dark;
 }
 
-html,
-body,
-#root {
-  height: 100%;
-}
-
 body {
   background-color: var(--color-base-950);
   background-image:
     radial-gradient(ellipse 80% 50% at 50% -10%, rgba(139, 92, 246, 0.12), transparent);
-  background-attachment: fixed;
   color: var(--color-base-200);
   font-family: var(--font-sans);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  /* Guard against any stray subpixel/negative-margin overflow causing a
+     phantom horizontal scrollbar, especially on mobile. */
+  overflow-x: hidden;
 }
 
 * {

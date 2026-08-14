@@ -17,14 +17,14 @@ function AppShell() {
 
   if (loading) {
     return (
-      <div className="flex h-screen items-center justify-center bg-base-950">
+      <div className="flex h-dvh items-center justify-center bg-base-950">
         <div className="h-8 w-8 animate-spin rounded-full border-2 border-base-700 border-t-accent-400" />
       </div>
     )
   }
 
   return (
-    <div className="min-h-screen bg-base-950">
+    <div className="min-h-dvh bg-base-950">
       {showNav && <Navbar />}
       <AnimatePresence mode="wait">
         <Routes location={location} key={location.pathname}>
