@@ -1,63 +1,89 @@
 import { createContext, useContext, useEffect, useMemo, useState } from 'react'
 import type { ReactNode } from 'react'
-import type { Session, User } from '@supabase/supabase-js'
 import { supabase } from '../lib/supabase'
+import type { AppUser } from '../types'
+
+const STORAGE_KEY = 'tvbox_user'
 
 interface AuthContextValue {
-  user: User | null
-  session: Session | null
+  user: AppUser | null
   loading: boolean
-  /** Step 1: send a one-time code to the given email address. */
-  sendCode: (email: string) => Promise<void>
-  /** Step 2: verify the 6-digit code that was emailed to the user. */
-  verifyCode: (email: string, code: string) => Promise<void>
-  signOut: () => Promise<void>
+  /**
+   * Looks up a user by email. Returns the user if found (caller should treat
+   * this as "logged in"), or null if this email hasn't registered yet
+   * (caller should then prompt for a username and call register()).
+   */
+  findByEmail: (email: string) => Promise<AppUser | null>
+  /** Creates a new user with the given email + unique username and signs them in. */
+  register: (email: string, username: string) => Promise<AppUser>
+  /** Sets the given user as the active session (used after findByEmail succeeds). */
+  signIn: (user: AppUser) => void
+  signOut: () => void
 }
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined)
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [session, setSession] = useState<Session | null>(null)
+  const [user, setUser] = useState<AppUser | null>(null)
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    supabase.auth.getSession().then(({ data }) => {
-      setSession(data.session)
-      setLoading(false)
-    })
-
-    const { data: listener } = supabase.auth.onAuthStateChange((_event, newSession) => {
-      setSession(newSession)
-    })
-
-    return () => listener.subscription.unsubscribe()
+    const stored = localStorage.getItem(STORAGE_KEY)
+    if (stored) {
+      try {
+        setUser(JSON.parse(stored) as AppUser)
+      } catch {
+        localStorage.removeItem(STORAGE_KEY)
+      }
+    }
+    setLoading(false)
   }, [])
 
   const value = useMemo<AuthContextValue>(
     () => ({
-      user: session?.user ?? null,
-      session,
+      user,
       loading,
-      async sendCode(email: string) {
-        const { error } = await supabase.auth.signInWithOtp({
-          email,
-          options: { shouldCreateUser: true },
-        })
+      async findByEmail(email: string) {
+        const { data, error } = await supabase
+          .from('users')
+          .select('*')
+          .eq('email', email.toLowerCase().trim())
+          .maybeSingle()
         if (error) throw error
+        return (data as AppUser) ?? null
       },
-      async verifyCode(email: string, code: string) {
-        const { error } = await supabase.auth.verifyOtp({
-          email,
-          token: code,
-          type: 'email',
-        })
-        if (error) throw error
+      async register(email: string, username: string) {
+        const { data, error } = await supabase
+          .from('users')
+          .insert({ email: email.toLowerCase().trim(), username: username.trim() })
+          .select()
+          .single()
+        if (error) {
+          if (error.code === '23505') {
+            // unique_violation -- figure out which column collided for a clearer message
+            throw new Error(
+              error.message.includes('username')
+                ? 'That username is taken. Try another.'
+                : 'An account with that email already exists.',
+            )
+          }
+          throw error
+        }
+        const newUser = data as AppUser
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(newUser))
+        setUser(newUser)
+        return newUser
       },
-      async signOut() {
-        await supabase.auth.signOut()
+      signIn(nextUser: AppUser) {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(nextUser))
+        setUser(nextUser)
+      },
+      signOut() {
+        localStorage.removeItem(STORAGE_KEY)
+        setUser(null)
       },
     }),
-    [session, loading],
+    [user, loading],
   )
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>

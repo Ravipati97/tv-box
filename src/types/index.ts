@@ -51,6 +51,14 @@ export interface TmdbSeasonDetail {
 
 // --- App / Supabase shapes ---
 
+/** A registered TV Box user. No password/verification -- see AuthContext. */
+export interface AppUser {
+  id: string
+  email: string
+  username: string
+  created_at: string
+}
+
 export interface EpisodeRating {
   id: string
   user_id: string

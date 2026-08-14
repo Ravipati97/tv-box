@@ -46,8 +46,9 @@ export default function Profile() {
         <div>
           <p className="text-xs uppercase tracking-wide text-base-500">Signed in as</p>
           <h1 className="font-display text-lg font-semibold text-base-100 sm:text-xl">
-            {user?.email}
+            @{user?.username}
           </h1>
+          <p className="text-xs text-base-500">{user?.email}</p>
         </div>
         <button
           type="button"

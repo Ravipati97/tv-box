@@ -1,58 +1,38 @@
 # TV Box
 
-Letterboxd, but for TV shows. Search a show, rate it episode by episode. Dark mode, mobile + desktop, built with React + Vite + Tailwind + Framer Motion, backed by Supabase (auth + database) and TMDB (show data), hosted free on GitHub Pages.
+Letterboxd, but for TV shows. Search a show, rate it episode by episode. Dark mode, mobile + desktop, built with React + Vite + Tailwind + Framer Motion, backed by Supabase (database) and TMDB (show data), hosted free on GitHub Pages.
 
 Live at: `https://<your-github-username>.github.io/tv-box/` once deployed.
 
 ## How it works
 
-GitHub Pages only serves static files — there's no server to run code, no database, and no way to send emails. So this app leans on two free backend services instead of a custom server:
+GitHub Pages only serves static files — there's no server to run code and no database. So this app leans on two free backend services instead of a custom server:
 
-- **Supabase** — Postgres database + built-in passwordless email-OTP auth. This is what sends the 6-digit login code to a user's Gmail (or any email) and stores everyone's episode ratings.
+- **Supabase** — just a Postgres database here (no email sending, no password auth — see "About sign-in" below). Stores registered users and everyone's episode ratings.
 - **TMDB (The Movie Database)** — free API for show/season/episode data and artwork.
 
 Both are called directly from the browser, so there's nothing to deploy except the static frontend.
 
+### About sign-in
+
+There's no password and no email verification. Signing in is just: type your email → if it's new, pick a username and you're registered; if it's already registered, you're straight in. That's it — no OTP, no magic link, no Supabase Auth.
+
+This was a deliberate simplification: real email-based verification needs either Supabase's email sending (which, as of mid-2026, no longer lets free-tier projects customize the OTP email template) or your own SMTP provider — both are more setup than this project needs. The tradeoff is that anyone who knows or guesses another user's email could sign in as them — fine for a personal/hobby project, not something to put real accounts behind. If you want real security later, swap `AuthContext.tsx` for Supabase Auth (email OTP or password) and tighten the RLS policies in `schema.sql` to check `auth.uid()` instead of allowing all requests.
+
 ## One-time setup
 
-You need to do these four things before the app works. Takes about 10 minutes.
+You need to do these four things before the app works. Takes about 5 minutes.
 
 ### 1. Create a Supabase project
 
-**a. Create the project**
 1. Go to [supabase.com](https://supabase.com) and sign in (GitHub login is easiest).
 2. You land on the **Organization** page. Click **New project**.
-3. Pick a name (e.g. `tv-box`), generate/set a database password (save it somewhere — you likely won't need it again, but just in case), pick the region closest to you, leave the plan as **Free**.
-4. Click **Create new project**. It takes 1–2 minutes to provision — you'll see a progress screen, then land on the project dashboard.
+3. Pick a name (e.g. `tv-box`), generate/set a database password (save it somewhere, just in case), pick the region closest to you, leave the plan as **Free**.
+4. Click **Create new project**. It takes 1–2 minutes to provision.
+5. Copy your API credentials: left sidebar → gear icon **Project Settings** → **API Keys** (or **Data API** in some versions). Copy the **Project URL** — that's `VITE_SUPABASE_URL`. For the key, either grab the **Publishable key** (`sb_publishable_...`) if you see one, or the **anon** `public` key (starts `eyJ...`) under a **Legacy API Keys** tab if that's what's shown — either works the same as `VITE_SUPABASE_ANON_KEY`.
+6. Run the schema: left sidebar → **SQL Editor** → **New query**. Open [`supabase/schema.sql`](./supabase/schema.sql) from this repo, paste its full contents in, and click **Run**. You should see "Success. No rows returned." This creates the `users` and `episode_ratings` tables.
 
-**b. Copy your API credentials**
-1. In the left sidebar, click the gear icon **Project Settings** (near the bottom), then **API Keys** (or **Data API** in some versions).
-2. Copy the **Project URL** at the top — this is `VITE_SUPABASE_URL`.
-3. For the key, Supabase has two naming schemes depending on when your project was created:
-   - If you see a **Publishable key** (starts with `sb_publishable_...`), copy that — it's `VITE_SUPABASE_ANON_KEY`.
-   - If instead you see a **Legacy API Keys** tab with an `anon` `public` key (a long string starting with `eyJ...`), copy that one instead. Either format works fine — they do the same job.
-
-**c. Run the database schema**
-1. In the left sidebar, click **SQL Editor**, then **New query**.
-2. Open [`supabase/schema.sql`](./supabase/schema.sql) from this repo, copy its full contents, and paste them into the query editor.
-3. Click **Run** (or press Cmd/Ctrl+Enter). You should see "Success. No rows returned." This creates the `episode_ratings` table plus the security rules that keep each user's ratings private to them.
-
-**d. Turn on email login**
-1. Left sidebar → **Authentication** → **Sign In / Providers** (or **Providers** tab).
-2. Confirm **Email** is enabled (it is by default on new projects).
-
-**e. Make the login code show up in the email**
-1. Left sidebar → **Authentication** → **Emails** → **Templates**, then select the **Magic Link** template (this is the one used behind the scenes when the app asks for an OTP).
-2. By default the template only shows a clickable link, not a code. Replace the template body with something like:
-
-   ```html
-   <h2>Your TV Box login code</h2>
-   <p>Enter this code in the app:</p>
-   <h1>{{ .Token }}</h1>
-   <p>This code expires shortly and can only be used once.</p>
-   ```
-
-   `{{ .Token }}` is the 6-digit code — that's the actual line that matters. Save the template.
+That's the whole Supabase side — no auth providers, no email templates to configure.
 
 ### 2. Get a TMDB API key
 
@@ -93,7 +73,7 @@ If you ever rename the repository, update `base: '/tv-box/'` in `vite.config.ts`
 
 ## Features (v1)
 
-- Passwordless login: enter an email, get a 6-digit code, sign in.
+- Lightweight sign-in: enter an email — new users pick a username, returning users are straight in. No password, no verification (see "About sign-in" above).
 - Search any TV show (TMDB).
 - Per-episode 5-star rating (half-star precision) — click the same rating again to clear it.
 - Profile page: a diary of everything you've rated, with quick stats (episodes rated, shows, average rating).
@@ -106,7 +86,7 @@ Not included by design (per the original scope): recommendations, trending, soci
 ```
 src/
   components/     StarRating, ShowCard, EpisodeRow, Navbar, SeasonTabs, skeleton loaders
-  contexts/       AuthContext (Supabase session + OTP login)
+  contexts/       AuthContext (email + username sign-in, session kept in localStorage)
   lib/            supabase.ts, tmdb.ts, ratings.ts (all Supabase/TMDB calls live here)
   pages/          Login, Search, ShowDetail, Profile
 supabase/

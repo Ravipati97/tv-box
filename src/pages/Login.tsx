@@ -1,36 +1,23 @@
-import { useRef, useState } from 'react'
+import { useState } from 'react'
 import type { FormEvent } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
 import { Navigate } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
 import { isSupabaseConfigured } from '../lib/supabase'
 
-type Step = 'email' | 'code'
+type Step = 'email' | 'username'
 
 export default function Login() {
-  const { user, sendCode, verifyCode } = useAuth()
+  const { user, findByEmail, register, signIn } = useAuth()
   const [step, setStep] = useState<Step>('email')
   const [email, setEmail] = useState('')
-  const [code, setCode] = useState('')
+  const [username, setUsername] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
-  const [resendCooldown, setResendCooldown] = useState(0)
-  const cooldownTimer = useRef<ReturnType<typeof setInterval> | null>(null)
 
   if (user) return <Navigate to="/search" replace />
 
-  function startCooldown() {
-    setResendCooldown(30)
-    if (cooldownTimer.current) clearInterval(cooldownTimer.current)
-    cooldownTimer.current = setInterval(() => {
-      setResendCooldown((s) => {
-        if (s <= 1 && cooldownTimer.current) clearInterval(cooldownTimer.current)
-        return Math.max(0, s - 1)
-      })
-    }, 1000)
-  }
-
-  async function handleSendCode(e: FormEvent) {
+  async function handleEmailSubmit(e: FormEvent) {
     e.preventDefault()
     setError(null)
     if (!/^\S+@\S+\.\S+$/.test(email)) {
@@ -39,29 +26,33 @@ export default function Login() {
     }
     setBusy(true)
     try {
-      await sendCode(email)
-      setStep('code')
-      startCooldown()
+      const existing = await findByEmail(email)
+      if (existing) {
+        signIn(existing)
+      } else {
+        setStep('username')
+      }
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Could not send code. Try again.')
+      setError(err instanceof Error ? err.message : 'Something went wrong. Try again.')
     } finally {
       setBusy(false)
     }
   }
 
-  async function handleVerifyCode(e: FormEvent) {
+  async function handleUsernameSubmit(e: FormEvent) {
     e.preventDefault()
     setError(null)
-    if (code.trim().length < 6) {
-      setError('Enter the 6-digit code from your email.')
+    const trimmed = username.trim()
+    if (!/^[a-zA-Z0-9_]{3,20}$/.test(trimmed)) {
+      setError('Username must be 3-20 characters: letters, numbers, underscores.')
       return
     }
     setBusy(true)
     try {
-      await verifyCode(email, code.trim())
-      // Successful verification updates the auth session; the Navigate above will fire.
+      await register(email, trimmed)
+      // Successful registration updates the auth state; the Navigate above will fire.
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'That code didn’t work. Try again.')
+      setError(err instanceof Error ? err.message : 'Could not create your account. Try again.')
     } finally {
       setBusy(false)
     }
@@ -88,7 +79,7 @@ export default function Login() {
         {!isSupabaseConfigured && (
           <div className="mb-4 rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-300">
             Supabase isn&apos;t configured yet. Set VITE_SUPABASE_URL and
-            VITE_SUPABASE_ANON_KEY (see README) for login to work.
+            VITE_SUPABASE_ANON_KEY (see README) for sign-in to work.
           </div>
         )}
 
@@ -101,7 +92,7 @@ export default function Login() {
                 animate={{ opacity: 1, x: 0 }}
                 exit={{ opacity: 0, x: -12 }}
                 transition={{ duration: 0.25 }}
-                onSubmit={handleSendCode}
+                onSubmit={handleEmailSubmit}
                 className="space-y-4"
               >
                 <div>
@@ -125,37 +116,37 @@ export default function Login() {
                   disabled={busy}
                   className="w-full rounded-lg bg-accent-500 py-2.5 text-sm font-semibold text-white transition-colors duration-200 hover:bg-accent-600 disabled:opacity-50"
                 >
-                  {busy ? 'Sending code…' : 'Send login code'}
+                  {busy ? 'Checking…' : 'Continue'}
                 </button>
                 <p className="text-center text-xs text-base-500">
-                  We&apos;ll email you a one-time 6-digit code. No password needed.
+                  New here? We&apos;ll ask you to pick a username next. Returning? You&apos;re
+                  straight in — no password needed.
                 </p>
               </motion.form>
             ) : (
               <motion.form
-                key="code"
+                key="username"
                 initial={{ opacity: 0, x: 12 }}
                 animate={{ opacity: 1, x: 0 }}
                 exit={{ opacity: 0, x: -12 }}
                 transition={{ duration: 0.25 }}
-                onSubmit={handleVerifyCode}
+                onSubmit={handleUsernameSubmit}
                 className="space-y-4"
               >
                 <div>
                   <p className="text-sm text-base-300">
-                    Enter the code sent to <span className="font-medium text-base-100">{email}</span>
+                    First time seeing <span className="font-medium text-base-100">{email}</span>.
+                    Pick a username to finish creating your account.
                   </p>
                   <input
-                    id="code"
+                    id="username"
                     type="text"
-                    inputMode="numeric"
-                    autoComplete="one-time-code"
+                    autoComplete="username"
                     autoFocus
-                    maxLength={6}
-                    value={code}
-                    onChange={(e) => setCode(e.target.value.replace(/\D/g, ''))}
-                    placeholder="123456"
-                    className="mt-3 w-full rounded-lg border border-white/10 bg-base-900 px-3.5 py-3 text-center text-lg font-semibold tracking-[0.5em] text-base-100 placeholder:tracking-normal placeholder:text-base-500 focus:border-accent-500/60"
+                    value={username}
+                    onChange={(e) => setUsername(e.target.value)}
+                    placeholder="username"
+                    className="mt-3 w-full rounded-lg border border-white/10 bg-base-900 px-3.5 py-2.5 text-sm text-base-100 placeholder:text-base-500 focus:border-accent-500/60"
                   />
                 </div>
                 {error && <p className="text-xs text-red-400">{error}</p>}
@@ -164,37 +155,19 @@ export default function Login() {
                   disabled={busy}
                   className="w-full rounded-lg bg-accent-500 py-2.5 text-sm font-semibold text-white transition-colors duration-200 hover:bg-accent-600 disabled:opacity-50"
                 >
-                  {busy ? 'Verifying…' : 'Verify & sign in'}
+                  {busy ? 'Creating account…' : 'Create account'}
                 </button>
-                <div className="flex items-center justify-between text-xs text-base-500">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setStep('email')
-                      setCode('')
-                      setError(null)
-                    }}
-                    className="hover:text-base-300"
-                  >
-                    &larr; Use a different email
-                  </button>
-                  <button
-                    type="button"
-                    disabled={resendCooldown > 0 || busy}
-                    onClick={async () => {
-                      setError(null)
-                      try {
-                        await sendCode(email)
-                        startCooldown()
-                      } catch (err) {
-                        setError(err instanceof Error ? err.message : 'Could not resend code.')
-                      }
-                    }}
-                    className="hover:text-base-300 disabled:opacity-50"
-                  >
-                    {resendCooldown > 0 ? `Resend in ${resendCooldown}s` : 'Resend code'}
-                  </button>
-                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setStep('email')
+                    setUsername('')
+                    setError(null)
+                  }}
+                  className="w-full text-center text-xs text-base-500 hover:text-base-300"
+                >
+                  &larr; Use a different email
+                </button>
               </motion.form>
             )}
           </AnimatePresence>
