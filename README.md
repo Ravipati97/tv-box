@@ -19,11 +19,31 @@ You need to do these four things before the app works. Takes about 10 minutes.
 
 ### 1. Create a Supabase project
 
-1. Go to [supabase.com](https://supabase.com), sign in, click **New project**.
-2. Once it's created, go to **Project Settings → API**. Copy the **Project URL** and the **anon public** key — you'll need both shortly.
-3. Go to **SQL Editor → New query**, paste the contents of [`supabase/schema.sql`](./supabase/schema.sql), and run it. This creates the `episode_ratings` table with row-level security so each user can only ever see their own ratings.
-4. Go to **Authentication → Providers → Email** and make sure Email is enabled. Turn **off** "Confirm email" if you want first-time sign-in to work with just the code (otherwise it still works, it just also requires the code — Supabase's OTP flow handles this fine either way).
-5. Go to **Authentication → Emails → Magic Link** template (this is the template `signInWithOtp` uses). By default it only shows a clickable link. Edit it so the 6-digit code is visible, e.g.:
+**a. Create the project**
+1. Go to [supabase.com](https://supabase.com) and sign in (GitHub login is easiest).
+2. You land on the **Organization** page. Click **New project**.
+3. Pick a name (e.g. `tv-box`), generate/set a database password (save it somewhere — you likely won't need it again, but just in case), pick the region closest to you, leave the plan as **Free**.
+4. Click **Create new project**. It takes 1–2 minutes to provision — you'll see a progress screen, then land on the project dashboard.
+
+**b. Copy your API credentials**
+1. In the left sidebar, click the gear icon **Project Settings** (near the bottom), then **API Keys** (or **Data API** in some versions).
+2. Copy the **Project URL** at the top — this is `VITE_SUPABASE_URL`.
+3. For the key, Supabase has two naming schemes depending on when your project was created:
+   - If you see a **Publishable key** (starts with `sb_publishable_...`), copy that — it's `VITE_SUPABASE_ANON_KEY`.
+   - If instead you see a **Legacy API Keys** tab with an `anon` `public` key (a long string starting with `eyJ...`), copy that one instead. Either format works fine — they do the same job.
+
+**c. Run the database schema**
+1. In the left sidebar, click **SQL Editor**, then **New query**.
+2. Open [`supabase/schema.sql`](./supabase/schema.sql) from this repo, copy its full contents, and paste them into the query editor.
+3. Click **Run** (or press Cmd/Ctrl+Enter). You should see "Success. No rows returned." This creates the `episode_ratings` table plus the security rules that keep each user's ratings private to them.
+
+**d. Turn on email login**
+1. Left sidebar → **Authentication** → **Sign In / Providers** (or **Providers** tab).
+2. Confirm **Email** is enabled (it is by default on new projects).
+
+**e. Make the login code show up in the email**
+1. Left sidebar → **Authentication** → **Emails** → **Templates**, then select the **Magic Link** template (this is the one used behind the scenes when the app asks for an OTP).
+2. By default the template only shows a clickable link, not a code. Replace the template body with something like:
 
    ```html
    <h2>Your TV Box login code</h2>
@@ -32,7 +52,7 @@ You need to do these four things before the app works. Takes about 10 minutes.
    <p>This code expires shortly and can only be used once.</p>
    ```
 
-   The `{{ .Token }}` variable is the numeric code the app's login screen asks for.
+   `{{ .Token }}` is the 6-digit code — that's the actual line that matters. Save the template.
 
 ### 2. Get a TMDB API key
 
