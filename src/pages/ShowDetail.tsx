@@ -170,12 +170,12 @@ export default function ShowDetail() {
   return (
     <div className="pb-24 md:pb-10">
       {/* Hero */}
-      <div className="relative h-56 w-full overflow-hidden sm:h-72 md:h-80">
+      <div className="relative h-56 w-full overflow-hidden sm:h-72 md:h-80 lg:h-96">
         {show?.backdrop_path ? (
           <img
             src={backdropUrl(show.backdrop_path) ?? undefined}
             alt=""
-            className="h-full w-full object-cover"
+            className="h-full w-full object-cover object-top"
           />
         ) : (
           <div className="h-full w-full bg-base-850" />
@@ -185,11 +185,13 @@ export default function ShowDetail() {
 
       <div className="mx-auto -mt-20 max-w-5xl px-4 sm:-mt-24 sm:px-6">
         <div className="flex gap-4 sm:gap-6">
-          <div className="w-28 shrink-0 overflow-hidden rounded-xl shadow-2xl shadow-black/50 ring-1 ring-white/10 sm:w-40">
-            {show?.poster_path ? (
-              <img src={posterUrl(show.poster_path) ?? undefined} alt={show.name} className="w-full" />
-            ) : (
-              <div className="aspect-[2/3] w-full bg-base-800" />
+          <div className="aspect-[2/3] w-28 shrink-0 overflow-hidden rounded-xl bg-base-800 shadow-2xl shadow-black/50 ring-1 ring-white/10 sm:w-40">
+            {show?.poster_path && (
+              <img
+                src={posterUrl(show.poster_path) ?? undefined}
+                alt={show.name}
+                className="h-full w-full object-cover"
+              />
             )}
           </div>
 
