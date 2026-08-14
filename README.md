@@ -12,7 +12,7 @@ Letterboxd, but for TV shows — search a show, rate it episode by episode.
 - **See what others rated** — each episode also shows everyone else's average rating; tap it to see who rated what, and drop a quick 🔥😂😭💀 reaction on any of their ratings.
 - **Members** — browse everyone who's registered and check out their diaries.
 - **Compare with a friend** — from anyone's profile, see the shows you've both rated, your taste-match %, and your biggest agreements/disagreements.
-- **Profile** — your own diary of everything you've rated, with stats.
+- **Profile** — stats, a day-by-day Diary of everything you've rated, and a Shows tab grouping that into one entry per show (tap a show to see just its episodes, most recently rated first).
 
 Sign-in has no password or verification, so anyone who knows your email could sign in as you — fine for a small group of friends, not for anything sensitive.
 

@@ -12,6 +12,7 @@ import ShowDetail from './pages/ShowDetail'
 import Profile from './pages/Profile'
 import Members from './pages/Members'
 import PublicProfile from './pages/PublicProfile'
+import ShowDiary from './pages/ShowDiary'
 import Compare from './pages/Compare'
 
 function AppShell() {
@@ -77,6 +78,14 @@ function AppShell() {
             element={
               <ProtectedRoute>
                 <PublicProfile />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/u/:username/shows/:showId"
+            element={
+              <ProtectedRoute>
+                <ShowDiary />
               </ProtectedRoute>
             }
           />

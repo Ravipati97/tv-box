@@ -48,6 +48,22 @@ export async function fetchRecentRatings(userId: string, limit = 60): Promise<Ep
   return (data ?? []) as EpisodeRating[]
 }
 
+/** One user's ratings for a single show, most-recently-rated first. */
+export async function fetchRatingsForUserAndShow(
+  userId: string,
+  showId: number,
+): Promise<EpisodeRating[]> {
+  const { data, error } = await supabase
+    .from('episode_ratings')
+    .select('*')
+    .eq('user_id', userId)
+    .eq('show_id', showId)
+    .order('rated_at', { ascending: false })
+
+  if (error) throw error
+  return (data ?? []) as EpisodeRating[]
+}
+
 export interface UpsertRatingInput {
   userId: string
   showId: number
