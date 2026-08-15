@@ -39,6 +39,7 @@ import { invalidatePlatformCache, pickBestFreeProvider } from '../lib/streamingP
 import { addToWatchlist, fetchWatchlistItem, removeFromWatchlist } from '../lib/watchlist'
 import { deleteRewatch, fetchRewatchesForShow, logRewatch } from '../lib/rewatches'
 import { fetchListMembershipForShow } from '../lib/lists'
+import { computeSeasonProgress } from '../lib/seasonProgress'
 import { formatShortDate } from '../lib/date'
 import { useAuth } from '../contexts/AuthContext'
 import type {
@@ -104,7 +105,7 @@ export default function ShowDetail() {
         const [showData, watchedMap, ratings, seasonRatingRows, watchlistRow, rewatchRows, listMembershipSet] =
           await Promise.all([
             getShowDetail(showId),
-            user ? fetchWatchedForShow(user.id, showId) : Promise.resolve({}),
+            user ? fetchWatchedForShow(user.id, showId) : Promise.resolve({} as WatchedMap),
             fetchAllShowRatings(showId),
             fetchAllSeasonRatingsForShow(showId),
             user ? fetchWatchlistItem(user.id, showId) : Promise.resolve(null),
@@ -119,8 +120,20 @@ export default function ShowDetail() {
         setWatchlistItem(watchlistRow)
         setRewatches(rewatchRows)
         setListMembership(listMembershipSet)
+        // Default to whichever season you're actually on -- the first one
+        // that isn't fully watched yet (same "current season" logic Home's
+        // Now Watching card already uses), not always Season 1. Falls back
+        // to the first real season if there's no watch progress at all, or
+        // to whatever season TMDB lists first if there's no "real" season
+        // (e.g. specials-only).
         const firstRealSeason = showData.seasons.find((s) => s.season_number > 0) ?? showData.seasons[0]
-        setActiveSeason(firstRealSeason ? firstRealSeason.season_number : null)
+        const watchedBySeasonCount: Record<number, number> = {}
+        for (const row of Object.values(watchedMap)) {
+          watchedBySeasonCount[row.season_number] = (watchedBySeasonCount[row.season_number] ?? 0) + 1
+        }
+        const progress = computeSeasonProgress(showData.seasons, watchedBySeasonCount)
+        const defaultSeason = progress?.currentSeasonNumber ?? firstRealSeason?.season_number ?? null
+        setActiveSeason(defaultSeason)
       } catch (err) {
         if (!cancelled) setError(err instanceof Error ? err.message : 'Failed to load show.')
       } finally {
