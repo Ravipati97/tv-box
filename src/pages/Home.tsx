@@ -6,8 +6,8 @@ import { fetchRecentShowRatings, fetchRecentShowRatingsAllUsers } from '../lib/s
 import { fetchRecentWatched, fetchRecentWatchedAllUsers } from '../lib/watched'
 import { summarizeShowActivity, nowWatching, watchHistory, buildGroupActivity } from '../lib/showActivity'
 import type { GroupActivityEvent } from '../lib/showActivity'
-import { computeSeasonProgress, fetchSeasonBreakdowns } from '../lib/seasonProgress'
-import type { SeasonProgress } from '../lib/seasonProgress'
+import { computeSeasonProgress, fetchNextEpisode, fetchSeasonBreakdowns } from '../lib/seasonProgress'
+import type { NextEpisode, SeasonProgress } from '../lib/seasonProgress'
 import { useStreamingPlatforms } from '../hooks/useStreamingPlatforms'
 import { posterUrl } from '../lib/tmdb'
 import { formatShortDate } from '../lib/date'
@@ -125,6 +125,36 @@ export default function Home() {
     }
   }, [watchingKey, watchedBySeasonByShow])
 
+  // "New episode soon" badge -- needs each show's *current* season's
+  // per-episode air dates, which seasonProgress above doesn't carry (only
+  // season-level episode counts), so this is a second, separate fetch keyed
+  // off the current-season number that fetch already worked out.
+  const [nextEpisodes, setNextEpisodes] = useState<Map<number, NextEpisode>>(new Map())
+
+  useEffect(() => {
+    if (seasonProgress.size === 0) {
+      setNextEpisodes(new Map())
+      return
+    }
+    let cancelled = false
+    Promise.all(
+      Array.from(seasonProgress.entries()).map(async ([showId, progress]) => {
+        const next = await fetchNextEpisode(showId, progress.currentSeasonNumber)
+        return [showId, next] as const
+      }),
+    ).then((results) => {
+      if (cancelled) return
+      const map = new Map<number, NextEpisode>()
+      for (const [showId, next] of results) {
+        if (next) map.set(showId, next)
+      }
+      setNextEpisodes(map)
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [seasonProgress])
+
   return (
     <div className="mx-auto max-w-5xl px-4 pb-24 pt-6 sm:px-6 md:pb-10">
       <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="mb-6">
@@ -205,6 +235,11 @@ export default function Home() {
                       ? ` · ${s.lastWatchedAtUnknown ? 'a while ago' : formatShortDate(s.lastWatchedAt)}`
                       : ''}
                   </p>
+                  {nextEpisodes.get(s.showId) && (
+                    <p className="text-[11px] text-accent-400">
+                      New episode {formatShortDate(nextEpisodes.get(s.showId)!.airDate)}
+                    </p>
+                  )}
                   <div className="mt-1.5">
                     <SeasonProgressBar
                       segments={

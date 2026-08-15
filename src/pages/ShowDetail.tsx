@@ -191,6 +191,15 @@ export default function ShowDetail() {
     return season.episodes.filter((ep) => watched[watchedKey(ep.season_number, ep.episode_number)]).length
   }, [season, watched])
 
+  // The active season's episode list is already loaded (has air_date), so
+  // this is just a client-side scan -- no separate fetch needed the way
+  // Home's badge (a different season, not currently open) requires one.
+  const nextUpcomingEpisode = useMemo(() => {
+    if (!season) return null
+    const now = new Date()
+    return season.episodes.find((ep) => ep.air_date && new Date(ep.air_date) > now) ?? null
+  }, [season])
+
   const myShowRating = useMemo(
     () => showRatings.find((r) => r.user_id === user?.id) ?? null,
     [showRatings, user],
@@ -826,6 +835,13 @@ export default function ShowDetail() {
         {/* Seasons */}
         {show && show.seasons.length > 0 && activeSeason !== null && (
           <div className="mt-8 border-t border-hairline pt-6">
+            {nextUpcomingEpisode && (
+              <p className="mb-3 text-xs text-base-500">
+                Next: S{nextUpcomingEpisode.season_number}E{nextUpcomingEpisode.episode_number} airs{' '}
+                {formatShortDate(nextUpcomingEpisode.air_date!)}
+              </p>
+            )}
+
             <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
               <SeasonTabs seasons={show.seasons} active={activeSeason} onSelect={setActiveSeason} />
               {season && seasonWatchedCount !== null && (

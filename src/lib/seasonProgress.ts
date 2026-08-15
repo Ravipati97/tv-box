@@ -1,4 +1,4 @@
-import { getShowDetail } from './tmdb'
+import { getSeasonDetail, getShowDetail } from './tmdb'
 import type { TmdbSeasonSummary } from '../types'
 
 /** One season's watched/total, in order -- the building block for a
@@ -76,4 +76,41 @@ export async function fetchSeasonBreakdowns(showIds: number[]): Promise<Map<numb
     if (seasons) result.set(id, seasons)
   }
   return result
+}
+
+export interface NextEpisode {
+  seasonNumber: number
+  episodeNumber: number
+  airDate: string
+}
+
+// Separate from seasonCache above: season *summaries* (episode counts)
+// never change within a session, but "what's the next unaired episode"
+// does, as real time passes -- keeping it in its own cache makes that
+// distinction explicit instead of silently reusing stale-shaped data.
+const nextEpisodeCache = new Map<string, NextEpisode | null>()
+
+function nextEpisodeCacheKey(showId: number, seasonNumber: number): string {
+  return `${showId}:${seasonNumber}`
+}
+
+/** The next not-yet-aired episode in one show's given season, if any --
+ * powers the "new episode soon" badge on Now Watching and the equivalent
+ * banner on ShowDetail. Cached per session. */
+export async function fetchNextEpisode(showId: number, seasonNumber: number): Promise<NextEpisode | null> {
+  const key = nextEpisodeCacheKey(showId, seasonNumber)
+  if (nextEpisodeCache.has(key)) return nextEpisodeCache.get(key) ?? null
+
+  try {
+    const detail = await getSeasonDetail(showId, seasonNumber)
+    const now = new Date()
+    const next = detail.episodes.find((ep) => ep.air_date && new Date(ep.air_date) > now)
+    const result: NextEpisode | null = next
+      ? { seasonNumber, episodeNumber: next.episode_number, airDate: next.air_date! }
+      : null
+    nextEpisodeCache.set(key, result)
+    return result
+  } catch {
+    return null
+  }
 }
