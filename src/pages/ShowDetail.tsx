@@ -5,7 +5,16 @@ import SeasonTabs from '../components/SeasonTabs'
 import EpisodeRow from '../components/EpisodeRow'
 import StarRating from '../components/StarRating'
 import { EpisodeRowSkeleton } from '../components/Skeletons'
-import { backdropUrl, getSeasonDetail, getShowDetail, posterUrl, yearFromDate } from '../lib/tmdb'
+import {
+  backdropUrl,
+  detectRegion,
+  getSeasonDetail,
+  getShowDetail,
+  getWatchProviders,
+  posterUrl,
+  providerLogoUrl,
+  yearFromDate,
+} from '../lib/tmdb'
 import { fetchAllShowRatings, upsertShowRating, deleteShowRating } from '../lib/showRatings'
 import { bulkMarkWatched, fetchWatchedForShow, markWatched, unmarkWatched, watchedKey } from '../lib/watched'
 import { useAuth } from '../contexts/AuthContext'
@@ -13,8 +22,22 @@ import type {
   ShowRatingWithUser,
   TmdbSeasonDetail,
   TmdbShowDetail,
+  TmdbWatchProvider,
+  TmdbWatchProviders,
   WatchedMap,
 } from '../types'
+
+/** Providers can repeat across flatrate/rent/buy -- keep one, sorted the way TMDB ranks them. */
+function dedupeProviders(list: TmdbWatchProvider[]): TmdbWatchProvider[] {
+  const seen = new Set<number>()
+  return list
+    .filter((p) => {
+      if (seen.has(p.provider_id)) return false
+      seen.add(p.provider_id)
+      return true
+    })
+    .sort((a, b) => a.display_priority - b.display_priority)
+}
 
 export default function ShowDetail() {
   const { id } = useParams<{ id: string }>()
@@ -31,6 +54,7 @@ export default function ShowDetail() {
   const [error, setError] = useState<string | null>(null)
   const [savingRating, setSavingRating] = useState(false)
   const [showRatersList, setShowRatersList] = useState(false)
+  const [providers, setProviders] = useState<TmdbWatchProviders | null>(null)
 
   // Load show detail + my watch progress + everyone's show rating, in parallel.
   useEffect(() => {
@@ -85,6 +109,34 @@ export default function ShowDetail() {
       cancelled = true
     }
   }, [showId, activeSeason])
+
+  // Where-to-watch is a nice-to-have -- fetch it separately so a hiccup on
+  // this endpoint never blocks or errors out the rest of the page.
+  useEffect(() => {
+    if (Number.isNaN(showId)) return
+    let cancelled = false
+    getWatchProviders(showId)
+      .then((data) => {
+        if (!cancelled) setProviders(data)
+      })
+      .catch(() => {
+        // Silently skip the section rather than surfacing an error for this.
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [showId])
+
+  const region = useMemo(() => detectRegion(), [])
+  const regionProviders = providers?.results[region] ?? null
+
+  const { providerList, providerKind } = useMemo(() => {
+    if (!regionProviders) return { providerList: [] as TmdbWatchProvider[], providerKind: null as 'stream' | 'rent' | null }
+    const stream = dedupeProviders(regionProviders.flatrate ?? [])
+    if (stream.length > 0) return { providerList: stream, providerKind: 'stream' as const }
+    const rentBuy = dedupeProviders([...(regionProviders.rent ?? []), ...(regionProviders.buy ?? [])])
+    return { providerList: rentBuy, providerKind: rentBuy.length > 0 ? ('rent' as const) : null }
+  }, [regionProviders])
 
   const watchedCount = Object.keys(watched).length
   const totalEpisodes = show?.number_of_episodes ?? null
@@ -375,6 +427,47 @@ export default function ShowDetail() {
                 {g.name}
               </span>
             ))}
+          </div>
+        )}
+
+        {/* Where to watch */}
+        {regionProviders && providerList.length > 0 && (
+          <div className="mt-5">
+            <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-base-500">
+              {providerKind === 'stream' ? 'Streaming' : 'Rent or buy'}
+            </p>
+            <div className="flex flex-wrap items-center gap-2">
+              {providerList.map((p) => (
+                <a
+                  key={p.provider_id}
+                  href={regionProviders.link}
+                  target="_blank"
+                  rel="noreferrer"
+                  title={p.provider_name}
+                  className="block h-10 w-10 shrink-0 overflow-hidden rounded-lg bg-base-800 ring-1 ring-white/10 transition-transform duration-150 hover:scale-105"
+                >
+                  {providerLogoUrl(p.logo_path) ? (
+                    <img
+                      src={providerLogoUrl(p.logo_path) ?? undefined}
+                      alt={p.provider_name}
+                      className="h-full w-full object-cover"
+                    />
+                  ) : (
+                    <div className="flex h-full w-full items-center justify-center text-center text-[8px] leading-tight text-base-400">
+                      {p.provider_name}
+                    </div>
+                  )}
+                </a>
+              ))}
+            </div>
+            <a
+              href={regionProviders.link}
+              target="_blank"
+              rel="noreferrer"
+              className="mt-1.5 inline-block text-[11px] text-base-500 hover:text-base-300"
+            >
+              Streaming data via JustWatch
+            </a>
           </div>
         )}
 

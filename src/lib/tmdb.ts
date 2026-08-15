@@ -1,4 +1,4 @@
-import type { TmdbSeasonDetail, TmdbShowDetail, TmdbShowSummary } from '../types'
+import type { TmdbSeasonDetail, TmdbShowDetail, TmdbShowSummary, TmdbWatchProviders } from '../types'
 
 const API_BASE = 'https://api.themoviedb.org/3'
 const IMAGE_BASE = 'https://image.tmdb.org/t/p'
@@ -49,6 +49,22 @@ export async function getSeasonDetail(
   return tmdbFetch<TmdbSeasonDetail>(`/tv/${showId}/season/${seasonNumber}`)
 }
 
+/** Streaming/rent/buy availability by country, sourced from JustWatch via TMDB. */
+export async function getWatchProviders(showId: number): Promise<TmdbWatchProviders> {
+  return tmdbFetch<TmdbWatchProviders>(`/tv/${showId}/watch/providers`)
+}
+
+/** Best-guess 2-letter region from the browser's own locale, falling back to US. */
+export function detectRegion(): string {
+  try {
+    const locale = navigator.language || 'en-US'
+    const region = locale.split('-')[1]?.toUpperCase()
+    return region && region.length === 2 ? region : 'US'
+  } catch {
+    return 'US'
+  }
+}
+
 type ImageSize =
   | 'w92'
   | 'w154'
@@ -71,6 +87,11 @@ export function backdropUrl(path: string | null, size: ImageSize = 'w1280'): str
 }
 
 export function stillUrl(path: string | null, size: ImageSize = 'w300'): string | null {
+  if (!path) return null
+  return `${IMAGE_BASE}/${size}${path}`
+}
+
+export function providerLogoUrl(path: string | null, size: ImageSize = 'w92'): string | null {
   if (!path) return null
   return `${IMAGE_BASE}/${size}${path}`
 }

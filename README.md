@@ -12,6 +12,7 @@ Letterboxd, but for TV shows — search a show, rate it, and track what you've w
 - **Rate** — open a show and give it one star rating (half-star precision). Tap the same rating again to clear it.
 - **Track episodes** — mark episodes watched as you go; the show page shows your progress (e.g. "12/24 watched"), and in-progress shows automatically show up on Home until you finish them.
 - **See what others rated** — the show page also shows everyone else's rating for it; tap it to see who rated what.
+- **Where to watch** — the show page shows which services it's streaming, renting, or buying on, based on your browser's region (data from JustWatch via TMDB).
 - **Members** — browse everyone who's registered and check out their diaries.
 - **Compare with a friend** — from anyone's profile, see the shows you've both rated, your taste-match %, and your biggest agreements/disagreements.
 - **Profile** — stats, a day-by-day Diary of everything you've rated, and a History tab of everything you've finished or rated (sort by most recent, top rated, or A–Z; tap a show for your watch history on it).

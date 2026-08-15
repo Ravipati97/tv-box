@@ -49,6 +49,31 @@ export interface TmdbSeasonDetail {
   episodes: TmdbEpisode[]
 }
 
+// --- TMDB watch providers (sourced from JustWatch via TMDB's API) ---
+
+export interface TmdbWatchProvider {
+  provider_id: number
+  provider_name: string
+  logo_path: string | null
+  display_priority: number
+}
+
+export interface TmdbWatchProviderRegion {
+  /** TMDB's own watch page for this title/region -- has full deep links + JustWatch attribution. */
+  link: string
+  flatrate?: TmdbWatchProvider[]
+  free?: TmdbWatchProvider[]
+  ads?: TmdbWatchProvider[]
+  rent?: TmdbWatchProvider[]
+  buy?: TmdbWatchProvider[]
+}
+
+/** Keyed by ISO 3166-1 country code, e.g. results.US, results.GB. */
+export interface TmdbWatchProviders {
+  id: number
+  results: Record<string, TmdbWatchProviderRegion>
+}
+
 // --- App / Supabase shapes ---
 
 /** A registered TV Box user. No password/verification -- see AuthContext. */
