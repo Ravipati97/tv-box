@@ -72,7 +72,10 @@ export default function ProfileActivity({ userId, username }: ProfileActivityPro
     const totalShows = ratings.length
     const finished = activity.filter((s) => s.finished).length
     const avg = totalShows === 0 ? null : ratings.reduce((sum, r) => sum + r.rating, 0) / totalShows
-    return { totalShows, finished, episodesWatched: watched.length, avg }
+    // Rows logged before runtime_minutes existed contribute 0 here rather
+    // than being excluded -- see scripts/backfill-runtime.mjs to fill them in.
+    const hoursWatched = Math.round(watched.reduce((sum, w) => sum + (w.runtime_minutes ?? 0), 0) / 60)
+    return { totalShows, finished, episodesWatched: watched.length, avg, hoursWatched }
   }, [ratings, watched, activity])
 
   // Ratings already arrive sorted newest-first, so grouping is just "start a
@@ -96,10 +99,11 @@ export default function ProfileActivity({ userId, username }: ProfileActivityPro
 
   return (
     <div>
-      <div className="mb-8 grid grid-cols-2 gap-3 sm:grid-cols-4">
+      <div className="mb-8 grid grid-cols-2 gap-3 sm:grid-cols-5">
         <StatCard label="Shows rated" value={stats.totalShows} />
         <StatCard label="Finished" value={stats.finished} />
         <StatCard label="Episodes watched" value={stats.episodesWatched} />
+        <StatCard label="Hours watched" value={stats.hoursWatched} />
         <StatCard label="Avg rating" value={stats.avg !== null ? stats.avg.toFixed(1) : '—'} />
       </div>
 

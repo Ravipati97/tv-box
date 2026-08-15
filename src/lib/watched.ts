@@ -86,6 +86,8 @@ export interface MarkWatchedInput {
   seasonNumber: number
   episodeNumber: number
   episodeName: string | null
+  /** Episode runtime in minutes, if known -- powers the "hours watched" stat. */
+  runtimeMinutes?: number | null
 }
 
 export async function markWatched(input: MarkWatchedInput): Promise<EpisodeWatched> {
@@ -105,6 +107,7 @@ export async function markWatched(input: MarkWatchedInput): Promise<EpisodeWatch
         // Real-time single toggle -- always a known, current date, even if
         // this episode previously carried an unknown-date bulk mark.
         watched_at_unknown: false,
+        runtime_minutes: input.runtimeMinutes ?? null,
       },
       { onConflict: 'user_id,show_id,season_number,episode_number' },
     )
@@ -121,7 +124,13 @@ export interface BulkMarkWatchedInput {
   showName: string
   showPosterPath: string | null
   showTotalEpisodes: number | null
-  episodes: { seasonNumber: number; episodeNumber: number; episodeName?: string | null }[]
+  episodes: {
+    seasonNumber: number
+    episodeNumber: number
+    episodeName?: string | null
+    /** Episode runtime in minutes, if known -- powers the "hours watched" stat. */
+    runtimeMinutes?: number | null
+  }[]
   /** ISO timestamp stamped on every row -- lets a bulk log land on the right date in History. */
   watchedAt: string
   /** True if watchedAt is just UNKNOWN_WATCHED_AT rather than a real date. */
@@ -146,6 +155,7 @@ export async function bulkMarkWatched(input: BulkMarkWatchedInput): Promise<Epis
     episode_name: ep.episodeName ?? null,
     watched_at: input.watchedAt,
     watched_at_unknown: input.watchedAtUnknown ?? false,
+    runtime_minutes: ep.runtimeMinutes ?? null,
   }))
 
   const { data, error } = await supabase

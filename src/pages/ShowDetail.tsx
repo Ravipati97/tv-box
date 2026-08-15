@@ -205,7 +205,7 @@ export default function ShowDetail() {
     [seasonRatingsForActive, user],
   )
 
-  async function handleToggleWatched(episodeNumber: number, episodeName: string) {
+  async function handleToggleWatched(episodeNumber: number, episodeName: string, runtimeMinutes: number | null) {
     if (!user || !show || activeSeason === null) return
     const key = watchedKey(activeSeason, episodeNumber)
 
@@ -228,12 +228,17 @@ export default function ShowDetail() {
       seasonNumber: activeSeason,
       episodeNumber,
       episodeName,
+      runtimeMinutes,
     })
     setWatched((prev) => ({ ...prev, [key]: saved }))
   }
 
   async function handleMarkAllWatched(input: { watchedAt: string; unknownDate: boolean }) {
     if (!user || !show) return
+    // No runtimeMinutes here -- show.seasons only has per-season episode
+    // counts, not per-episode runtimes (that needs a full season fetch,
+    // which this fast whole-show action deliberately skips). Those rows
+    // just contribute 0 to "hours watched" rather than blocking the action.
     const episodes = show.seasons
       .filter((s) => s.season_number > 0)
       .flatMap((s) =>
@@ -320,9 +325,9 @@ export default function ShowDetail() {
     if (!user || !show) return
     const firstSeason = show.seasons.find((s) => s.season_number > 0) ?? show.seasons[0]
     if (!firstSeason) return
-    const episodeName =
+    const firstEpisode =
       season && season.season_number === firstSeason.season_number
-        ? (season.episodes.find((ep) => ep.episode_number === 1)?.name ?? null)
+        ? (season.episodes.find((ep) => ep.episode_number === 1) ?? null)
         : null
     setStartingWatch(true)
     try {
@@ -332,7 +337,14 @@ export default function ShowDetail() {
         showName: show.name,
         showPosterPath: show.poster_path,
         showTotalEpisodes: show.number_of_episodes,
-        episodes: [{ seasonNumber: firstSeason.season_number, episodeNumber: 1, episodeName }],
+        episodes: [
+          {
+            seasonNumber: firstSeason.season_number,
+            episodeNumber: 1,
+            episodeName: firstEpisode?.name ?? null,
+            runtimeMinutes: firstEpisode?.runtime ?? null,
+          },
+        ],
         watchedAt: new Date().toISOString(),
         watchedAtUnknown: false,
       })
@@ -351,6 +363,7 @@ export default function ShowDetail() {
   async function handleMarkWatchedWithDate(
     episodeNumber: number,
     episodeName: string,
+    runtimeMinutes: number | null,
     input: { watchedAt: string; unknownDate: boolean },
   ) {
     if (!user || !show || activeSeason === null) return
@@ -361,7 +374,7 @@ export default function ShowDetail() {
       showName: show.name,
       showPosterPath: show.poster_path,
       showTotalEpisodes: show.number_of_episodes,
-      episodes: [{ seasonNumber: activeSeason, episodeNumber, episodeName }],
+      episodes: [{ seasonNumber: activeSeason, episodeNumber, episodeName, runtimeMinutes }],
       watchedAt: input.watchedAt,
       watchedAtUnknown: input.unknownDate,
     })
@@ -379,6 +392,7 @@ export default function ShowDetail() {
         seasonNumber: ep.season_number,
         episodeNumber: ep.episode_number,
         episodeName: ep.name,
+        runtimeMinutes: ep.runtime,
       }))
     const { previousRows, addedKeys } = snapshotBulkTargets(episodes)
     const saved = await bulkMarkWatched({
@@ -861,9 +875,9 @@ export default function ShowDetail() {
                       watchedAtUnknown={Boolean(
                         watched[watchedKey(ep.season_number, ep.episode_number)]?.watched_at_unknown,
                       )}
-                      onToggleWatched={() => handleToggleWatched(ep.episode_number, ep.name)}
+                      onToggleWatched={() => handleToggleWatched(ep.episode_number, ep.name, ep.runtime)}
                       onMarkWatchedWithDate={(input) =>
-                        handleMarkWatchedWithDate(ep.episode_number, ep.name, input)
+                        handleMarkWatchedWithDate(ep.episode_number, ep.name, ep.runtime, input)
                       }
                     />
                   ))}
