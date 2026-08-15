@@ -57,6 +57,7 @@ export default function ShowDetail() {
   const [providers, setProviders] = useState<TmdbWatchProviders | null>(null)
   const [override, setOverride] = useState<StreamingOverride | null>(null)
   const [pickerOpen, setPickerOpen] = useState(false)
+  const [startingWatch, setStartingWatch] = useState(false)
 
   // Load show detail + my watch progress + everyone's show/season ratings, in parallel.
   useEffect(() => {
@@ -228,8 +229,10 @@ export default function ShowDetail() {
    * than a separate status field to keep in sync with the real watch data,
    * this just marks the first episode watched: Now Watching is (and stays)
    * a pure derivation of episode_watched, so there's only ever one source
-   * of truth for what's in progress. */
-  async function handleStartWatching(input: { watchedAt: string; unknownDate: boolean }) {
+   * of truth for what's in progress. One tap, stamped "now" -- this is a
+   * declaration that you're starting today, not a past event to date, so
+   * unlike the other bulk actions it skips the date picker entirely. */
+  async function handleStartWatching() {
     if (!user || !show) return
     const firstSeason = show.seasons.find((s) => s.season_number > 0) ?? show.seasons[0]
     if (!firstSeason) return
@@ -237,21 +240,26 @@ export default function ShowDetail() {
       season && season.season_number === firstSeason.season_number
         ? (season.episodes.find((ep) => ep.episode_number === 1)?.name ?? null)
         : null
-    const saved = await bulkMarkWatched({
-      userId: user.id,
-      showId: show.id,
-      showName: show.name,
-      showPosterPath: show.poster_path,
-      showTotalEpisodes: show.number_of_episodes,
-      episodes: [{ seasonNumber: firstSeason.season_number, episodeNumber: 1, episodeName }],
-      watchedAt: input.watchedAt,
-      watchedAtUnknown: input.unknownDate,
-    })
-    setWatched((prev) => {
-      const next = { ...prev }
-      for (const row of saved) next[watchedKey(row.season_number, row.episode_number)] = row
-      return next
-    })
+    setStartingWatch(true)
+    try {
+      const saved = await bulkMarkWatched({
+        userId: user.id,
+        showId: show.id,
+        showName: show.name,
+        showPosterPath: show.poster_path,
+        showTotalEpisodes: show.number_of_episodes,
+        episodes: [{ seasonNumber: firstSeason.season_number, episodeNumber: 1, episodeName }],
+        watchedAt: new Date().toISOString(),
+        watchedAtUnknown: false,
+      })
+      setWatched((prev) => {
+        const next = { ...prev }
+        for (const row of saved) next[watchedKey(row.season_number, row.episode_number)] = row
+        return next
+      })
+    } finally {
+      setStartingWatch(false)
+    }
   }
 
   /** Same idea as handleToggleWatched, but for logging a single episode on a
@@ -492,7 +500,14 @@ export default function ShowDetail() {
             {watchedCount < totalEpisodes && (
               <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1.5">
                 {watchedCount === 0 && (
-                  <DateMarkControl label="Start watching" onConfirm={handleStartWatching} />
+                  <button
+                    type="button"
+                    onClick={handleStartWatching}
+                    disabled={startingWatch}
+                    className="text-xs text-accent-400 hover:underline disabled:opacity-60"
+                  >
+                    {startingWatch ? 'Adding…' : 'Start watching'}
+                  </button>
                 )}
                 <DateMarkControl
                   label="Seen this before? Mark it all watched"
