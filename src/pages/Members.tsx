@@ -64,11 +64,11 @@ export default function Members() {
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           placeholder="Find a username…"
-          className="w-full rounded-xl border border-white/10 bg-base-850 py-3 pl-10 pr-4 text-base text-base-100 placeholder:text-base-500 transition-colors duration-200 focus:border-accent-500/60 sm:text-sm"
+          className="w-full rounded-xl border border-hairline-strong bg-base-850 py-3 pl-10 pr-4 text-base text-base-100 placeholder:text-base-500 transition-all duration-200 focus:border-accent-500/60 focus:ring-4 focus:ring-accent-500/10 sm:text-sm"
         />
       </div>
 
-      {error && <p className="mb-4 text-sm text-red-400">{error}</p>}
+      {error && <p className="mb-4 text-sm text-danger">{error}</p>}
 
       {loading ? (
         <div className="space-y-2">
@@ -91,16 +91,16 @@ export default function Members() {
             >
               <Link
                 to={`/u/${u.username}`}
-                className="flex items-center gap-3 rounded-xl border border-white/5 bg-base-850/60 p-3 transition-colors duration-200 hover:bg-base-800/70"
+                className="flex items-center gap-3 rounded-xl border border-hairline bg-base-850/60 p-3 transition-colors duration-200 hover:bg-base-800/70"
               >
-                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-accent-500/15 text-sm font-semibold text-accent-300">
+                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-accent-500/15 text-sm font-semibold text-accent-300 ring-1 ring-accent-500/20">
                   {u.username.slice(0, 2).toUpperCase()}
                 </div>
                 <div className="min-w-0 flex-1">
                   <p className="truncate text-sm font-medium text-base-100">
                     @{u.username}
                     {me?.id === u.id && (
-                      <span className="ml-2 rounded-full bg-white/5 px-2 py-0.5 text-[10px] font-normal text-base-400">
+                      <span className="ml-2 rounded-full bg-hover-strong px-2 py-0.5 text-[10px] font-normal text-base-400">
                         You
                       </span>
                     )}

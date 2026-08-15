@@ -9,6 +9,14 @@ import { posterUrl } from '../lib/tmdb'
 import { formatShortDate } from '../lib/date'
 import type { EpisodeWatched, ShowRating } from '../types'
 
+function greeting(): string {
+  const hour = new Date().getHours()
+  if (hour < 5) return 'Still up'
+  if (hour < 12) return 'Good morning'
+  if (hour < 18) return 'Good afternoon'
+  return 'Good evening'
+}
+
 export default function Home() {
   const { user } = useAuth()
   const [ratings, setRatings] = useState<ShowRating[]>([])
@@ -46,36 +54,40 @@ export default function Home() {
 
   return (
     <div className="mx-auto max-w-5xl px-4 pb-24 pt-6 sm:px-6 md:pb-10">
-      <div className="mb-6">
-        <h1 className="font-display text-xl font-semibold text-base-100 sm:text-2xl">
+      <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="mb-6">
+        <p className="text-sm font-medium text-accent-400">
+          {greeting()}
+          {user ? `, @${user.username}` : ''}
+        </p>
+        <h1 className="font-display mt-0.5 text-xl font-semibold text-base-100 sm:text-2xl">
           Now Watching
         </h1>
         <p className="mt-1 text-sm text-base-500">
-          Shows you've started but haven't finished, most recently watched first.
+          Shows you&apos;ve started but haven&apos;t finished, most recently watched first.
         </p>
-      </div>
+      </motion.div>
 
-      {error && <p className="mb-4 text-sm text-red-400">{error}</p>}
+      {error && <p className="mb-4 text-sm text-danger">{error}</p>}
 
       {loading ? (
-        <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
+        <div className="grid grid-cols-2 gap-x-4 gap-y-6 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
           {Array.from({ length: 5 }).map((_, i) => (
             <div key={i} className="animate-pulse">
-              <div className="aspect-[2/3] rounded-xl bg-base-800" />
+              <div className="aspect-[2/3] rounded-2xl bg-base-800" />
               <div className="mt-2 h-3.5 w-3/4 rounded bg-base-800" />
               <div className="mt-1.5 h-1.5 w-full rounded-full bg-base-800" />
             </div>
           ))}
         </div>
       ) : watching.length === 0 ? (
-        <div className="mt-14 flex flex-col items-center text-center">
+        <div className="mt-14 flex flex-col items-center rounded-2xl border border-hairline bg-base-850/40 px-6 py-14 text-center">
           <div className="mb-3 text-4xl">📺</div>
-          <p className="text-sm text-base-500">
-            Nothing in progress. Mark an episode watched on any show and it'll show up here.
+          <p className="max-w-xs text-sm text-base-500">
+            Nothing in progress. Mark an episode watched on any show and it&apos;ll show up here.
           </p>
           <Link
             to="/search"
-            className="mt-4 rounded-lg border border-white/10 px-4 py-2 text-sm text-base-200 transition-colors duration-200 hover:border-accent-500/40 hover:text-accent-400"
+            className="mt-4 rounded-lg border border-hairline-strong px-4 py-2 text-sm text-base-200 transition-colors duration-200 hover:border-accent-500/40 hover:text-accent-400"
           >
             Find a show
           </Link>
@@ -95,12 +107,13 @@ export default function Home() {
                 transition={{ duration: 0.3, delay: Math.min(i, 12) * 0.02 }}
               >
                 <Link to={`/show/${s.showId}`} className="group block">
-                  <div className="relative aspect-[2/3] overflow-hidden rounded-xl bg-base-800 ring-1 ring-white/5 transition-shadow duration-300 group-hover:shadow-[0_8px_30px_rgba(139,92,246,0.25)]">
+                  <div className="relative aspect-[2/3] overflow-hidden rounded-2xl bg-base-800 ring-1 ring-hairline transition-all duration-300 group-hover:-translate-y-0.5 group-hover:shadow-[0_12px_32px_-8px_rgba(139,92,246,0.35)]">
                     {s.showPosterPath ? (
                       <img
                         src={posterUrl(s.showPosterPath) ?? undefined}
                         alt={s.showName}
                         loading="lazy"
+                        decoding="async"
                         className="h-full w-full object-cover transition-transform duration-500 ease-out group-hover:scale-[1.06]"
                       />
                     ) : (
@@ -120,7 +133,7 @@ export default function Home() {
                   {pct !== null && (
                     <div className="mt-1.5 h-1 w-full overflow-hidden rounded-full bg-base-800">
                       <div
-                        className="h-full rounded-full bg-accent-500"
+                        className="h-full rounded-full bg-accent-500 transition-[width] duration-300"
                         style={{ width: `${pct}%` }}
                       />
                     </div>

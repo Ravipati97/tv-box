@@ -17,6 +17,7 @@ Letterboxd, but for TV shows — search a show, rate it, and track what you've w
 - **Members** — browse everyone who's registered and check out their diaries.
 - **Compare with a friend** — from anyone's profile, see the shows you've both rated, your taste-match %, and your biggest agreements/disagreements.
 - **Profile** — stats, a day-by-day Diary of everything you've rated, and a History tab of everything you've finished or rated (sort by most recent, top rated, or A–Z; tap a show for your watch history on it).
+- **Light / dark mode** — tap the sun/moon icon in the top bar to switch. It remembers your choice and otherwise follows your system setting.
 
 Sign-in has no password or verification, so anyone who knows your email could sign in as you — fine for a small group of friends, not for anything sensitive.
 

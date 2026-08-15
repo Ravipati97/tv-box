@@ -95,9 +95,14 @@ export default function ShowDiary() {
       ) : (
         <>
           <div className="mb-8 flex items-center gap-4">
-            <div className="w-16 shrink-0 overflow-hidden rounded-lg ring-1 ring-white/10">
+            <div className="w-16 shrink-0 overflow-hidden rounded-lg ring-1 ring-hairline-strong">
               {posterPath ? (
-                <img src={posterUrl(posterPath) ?? undefined} alt="" className="w-full" />
+                <img
+                  src={posterUrl(posterPath) ?? undefined}
+                  alt=""
+                  decoding="async"
+                  className="w-full"
+                />
               ) : (
                 <div className="aspect-[2/3] w-full bg-base-800" />
               )}
@@ -142,7 +147,7 @@ export default function ShowDiary() {
                     initial={{ opacity: 0, y: 6 }}
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ duration: 0.25, delay: Math.min(i, 10) * 0.02 }}
-                    className="flex items-center justify-between rounded-xl border border-white/5 bg-base-850/60 p-3"
+                    className="flex items-center justify-between rounded-xl border border-hairline bg-base-850/60 p-3"
                   >
                     <div className="min-w-0">
                       <p className="truncate text-sm font-medium text-base-100">

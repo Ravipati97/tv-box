@@ -1,13 +1,33 @@
 <!doctype html>
-<html lang="en" class="dark">
+<html lang="en">
   <head>
     <meta charset="UTF-8" />
+    <script>
+      // Set the theme class before first paint (no flash of the wrong
+      // theme). Kept in sync at runtime by ThemeContext, which is the
+      // source of truth after React mounts -- this just resolves the same
+      // preference synchronously, before anything renders.
+      (function () {
+        try {
+          var stored = localStorage.getItem('tvbox-theme')
+          var theme =
+            stored === 'light' || stored === 'dark'
+              ? stored
+              : window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches
+                ? 'light'
+                : 'dark'
+          document.documentElement.classList.add(theme)
+        } catch (e) {
+          document.documentElement.classList.add('dark')
+        }
+      })()
+    </script>
     <link rel="icon" type="image/svg+xml" href="/tv-box/favicon.svg" />
     <meta
       name="viewport"
       content="width=device-width, initial-scale=1.0, viewport-fit=cover, interactive-widget=resizes-content"
     />
-    <meta name="theme-color" content="#0a0a0f" />
+    <meta name="theme-color" content="#08080c" />
     <meta name="description" content="TV Box — track and rate TV shows, episode by episode." />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />

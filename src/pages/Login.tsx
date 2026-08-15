@@ -88,7 +88,13 @@ export default function Login() {
         className="w-full max-w-sm"
       >
         <div className="mb-8 flex flex-col items-center text-center">
-          <svg width="48" height="48" viewBox="0 0 32 32" fill="none" className="mb-4">
+          <svg
+            width="48"
+            height="48"
+            viewBox="0 0 32 32"
+            fill="none"
+            className="mb-4 drop-shadow-[0_6px_20px_rgba(139,92,246,0.35)]"
+          >
             <rect width="32" height="32" rx="8" fill="var(--color-accent-500)" />
             <rect x="6" y="9" width="20" height="14" rx="3" fill="var(--color-base-950)" />
             <path d="M15 14.5L19 16.5L15 18.5V14.5Z" fill="var(--color-star)" />
@@ -98,13 +104,13 @@ export default function Login() {
         </div>
 
         {!isSupabaseConfigured && (
-          <div className="mb-4 rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-300">
+          <div className="mb-4 rounded-lg border border-warning/30 bg-warning/10 px-3 py-2 text-xs text-warning">
             Supabase isn&apos;t configured yet. Set VITE_SUPABASE_URL and
             VITE_SUPABASE_ANON_KEY (see README) for sign-in to work.
           </div>
         )}
 
-        <div className="overflow-hidden rounded-2xl border border-white/5 bg-base-850/70 p-6 shadow-xl shadow-black/20">
+        <div className="overflow-hidden rounded-2xl border border-hairline bg-base-850/70 p-6 shadow-xl shadow-black/10 dark:shadow-black/20">
           <AnimatePresence mode="wait">
             {step === 'email' ? (
               <motion.form
@@ -128,14 +134,14 @@ export default function Login() {
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
                     placeholder="you@gmail.com"
-                    className="w-full rounded-lg border border-white/10 bg-base-900 px-3.5 py-2.5 text-base text-base-100 placeholder:text-base-500 focus:border-accent-500/60 sm:text-sm"
+                    className="w-full rounded-lg border border-hairline-strong bg-base-900 px-3.5 py-2.5 text-base text-base-100 placeholder:text-base-500 focus:border-accent-500/60 sm:text-sm"
                   />
                 </div>
-                {error && <p className="text-xs text-red-400">{error}</p>}
+                {error && <p className="text-xs text-danger">{error}</p>}
                 <button
                   type="submit"
                   disabled={busy}
-                  className="w-full rounded-lg bg-accent-500 py-2.5 text-sm font-semibold text-white transition-colors duration-200 hover:bg-accent-600 disabled:opacity-50"
+                  className="w-full rounded-lg bg-accent-500 py-2.5 text-sm font-semibold text-white shadow-sm shadow-accent-500/30 transition-all duration-200 hover:bg-accent-600 hover:shadow-accent-500/40 active:scale-[0.98] disabled:opacity-50 disabled:active:scale-100"
                 >
                   {busy ? 'Checking…' : 'Continue'}
                 </button>
@@ -167,14 +173,14 @@ export default function Login() {
                     value={username}
                     onChange={(e) => setUsername(e.target.value)}
                     placeholder="username"
-                    className="mt-3 w-full rounded-lg border border-white/10 bg-base-900 px-3.5 py-2.5 text-base text-base-100 placeholder:text-base-500 focus:border-accent-500/60 sm:text-sm"
+                    className="mt-3 w-full rounded-lg border border-hairline-strong bg-base-900 px-3.5 py-2.5 text-base text-base-100 placeholder:text-base-500 focus:border-accent-500/60 sm:text-sm"
                   />
                 </div>
-                {error && <p className="text-xs text-red-400">{error}</p>}
+                {error && <p className="text-xs text-danger">{error}</p>}
                 <button
                   type="submit"
                   disabled={busy}
-                  className="w-full rounded-lg bg-accent-500 py-2.5 text-sm font-semibold text-white transition-colors duration-200 hover:bg-accent-600 disabled:opacity-50"
+                  className="w-full rounded-lg bg-accent-500 py-2.5 text-sm font-semibold text-white shadow-sm shadow-accent-500/30 transition-all duration-200 hover:bg-accent-600 hover:shadow-accent-500/40 active:scale-[0.98] disabled:opacity-50 disabled:active:scale-100"
                 >
                   {busy ? 'Creating account…' : 'Create account'}
                 </button>

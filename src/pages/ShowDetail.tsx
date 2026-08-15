@@ -308,11 +308,11 @@ export default function ShowDetail() {
   }
 
   if (Number.isNaN(showId)) {
-    return <p className="p-8 text-center text-sm text-red-400">Invalid show.</p>
+    return <p className="p-8 text-center text-sm text-danger">Invalid show.</p>
   }
 
   if (error && !show) {
-    return <p className="p-8 text-center text-sm text-red-400">{error}</p>
+    return <p className="p-8 text-center text-sm text-danger">{error}</p>
   }
 
   return (
@@ -323,6 +323,7 @@ export default function ShowDetail() {
           <img
             src={backdropUrl(show.backdrop_path) ?? undefined}
             alt=""
+            fetchPriority="high"
             className="h-full w-full object-cover"
           />
         ) : (
@@ -333,7 +334,7 @@ export default function ShowDetail() {
 
       <div className="mx-auto -mt-20 max-w-5xl px-4 sm:-mt-24 sm:px-6">
         <div className="flex gap-4 sm:gap-6">
-          <div className="aspect-[2/3] w-28 shrink-0 overflow-hidden rounded-xl bg-base-800 shadow-2xl shadow-black/50 ring-1 ring-white/10 sm:w-40">
+          <div className="aspect-[2/3] w-28 shrink-0 overflow-hidden rounded-xl bg-base-800 shadow-2xl shadow-black/50 ring-1 ring-hairline-strong sm:w-40">
             {show?.poster_path && (
               <img
                 src={posterUrl(show.poster_path) ?? undefined}
@@ -403,7 +404,7 @@ export default function ShowDetail() {
               <motion.ul
                 initial={{ opacity: 0, y: -4 }}
                 animate={{ opacity: 1, y: 0 }}
-                className="mt-2.5 max-w-xs space-y-1.5 border-t border-white/5 pt-2.5"
+                className="mt-2.5 max-w-xs space-y-1.5 border-t border-hairline pt-2.5"
               >
                 {showRatings
                   .slice()
@@ -469,7 +470,7 @@ export default function ShowDetail() {
             {show.genres.map((g) => (
               <span
                 key={g.id}
-                className="rounded-full border border-white/10 px-2.5 py-0.5 text-[11px] text-base-400"
+                className="rounded-full border border-hairline-strong px-2.5 py-0.5 text-[11px] text-base-400"
               >
                 {g.name}
               </span>
@@ -479,13 +480,13 @@ export default function ShowDetail() {
 
         {/* Where to watch -- one clear answer, correctable by anyone in the group */}
         {(effectiveProvider || regionProviders) && (
-          <div className="mt-5">
+          <div className="mt-6 max-w-md rounded-2xl border border-hairline bg-base-850/40 p-4">
             <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-base-500">
               Streaming
             </p>
             {effectiveProvider ? (
               <div className="flex items-center gap-2.5">
-                <div className="h-10 w-10 shrink-0 overflow-hidden rounded-lg bg-base-800 ring-1 ring-white/10">
+                <div className="h-10 w-10 shrink-0 overflow-hidden rounded-lg bg-base-800 ring-1 ring-hairline-strong">
                   {providerLogoUrl(effectiveProvider.logo_path) ? (
                     <img
                       src={providerLogoUrl(effectiveProvider.logo_path) ?? undefined}
@@ -548,7 +549,7 @@ export default function ShowDetail() {
 
         {/* Seasons */}
         {show && show.seasons.length > 0 && activeSeason !== null && (
-          <div className="mt-8">
+          <div className="mt-8 border-t border-hairline pt-6">
             <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
               <SeasonTabs seasons={show.seasons} active={activeSeason} onSelect={setActiveSeason} />
               {season && seasonWatchedCount !== null && (
@@ -639,7 +640,7 @@ function BulkMarkControl({
           max={today}
           disabled={unknownDate}
           onChange={(e) => setDate(e.target.value)}
-          className="rounded-lg border border-white/10 bg-base-900 px-2 py-1 text-xs text-base-200 disabled:opacity-40"
+          className="rounded-lg border border-hairline-strong bg-base-900 px-2 py-1 text-xs text-base-200 disabled:opacity-40"
         />
         <button
           type="button"
@@ -674,7 +675,7 @@ function BulkMarkControl({
           type="checkbox"
           checked={unknownDate}
           onChange={(e) => setUnknownDate(e.target.checked)}
-          className="h-3 w-3 rounded border-white/20 bg-base-900 accent-accent-500"
+          className="h-3 w-3 rounded border-hairline-strong bg-base-900 accent-accent-500"
         />
         Don&apos;t remember exactly when — just log it as watched a while ago
       </label>
@@ -727,7 +728,7 @@ function ProviderPicker({
   }, [allProviders, query])
 
   return (
-    <div className="mt-2 rounded-xl border border-white/10 bg-base-900 p-3">
+    <div className="mt-2 rounded-xl border border-hairline-strong bg-base-900 p-3">
       <div className="flex items-center justify-between gap-2">
         <input
           autoFocus
@@ -735,7 +736,7 @@ function ProviderPicker({
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           placeholder="Search platforms (Netflix, Hulu, Max...)"
-          className="w-full rounded-lg border border-white/10 bg-base-950 px-2.5 py-1.5 text-xs text-base-200 placeholder:text-base-600"
+          className="w-full rounded-lg border border-hairline-strong bg-base-950 px-2.5 py-1.5 text-xs text-base-200 placeholder:text-base-600"
         />
         <button
           type="button"
@@ -765,9 +766,9 @@ function ProviderPicker({
                     setSaving(false)
                   }
                 }}
-                className="flex items-center gap-2 rounded-lg px-1.5 py-1.5 text-left text-xs text-base-200 transition-colors duration-150 hover:bg-white/5 disabled:opacity-50"
+                className="flex items-center gap-2 rounded-lg px-1.5 py-1.5 text-left text-xs text-base-200 transition-colors duration-150 hover:bg-hover disabled:opacity-50"
               >
-                <div className="h-6 w-6 shrink-0 overflow-hidden rounded bg-base-800 ring-1 ring-white/10">
+                <div className="h-6 w-6 shrink-0 overflow-hidden rounded bg-base-800 ring-1 ring-hairline-strong">
                   {providerLogoUrl(p.logo_path) ? (
                     <img
                       src={providerLogoUrl(p.logo_path) ?? undefined}

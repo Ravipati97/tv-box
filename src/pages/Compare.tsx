@@ -119,7 +119,7 @@ export default function Compare() {
       </motion.h1>
       <p className="mb-6 text-sm text-base-500">How your ratings stack up on shows you&apos;ve both rated.</p>
 
-      {error && <p className="mb-4 text-sm text-red-400">{error}</p>}
+      {error && <p className="mb-4 text-sm text-danger">{error}</p>}
 
       {loading ? (
         <div className="space-y-2">
@@ -151,13 +151,15 @@ export default function Compare() {
               >
                 <Link
                   to={`/show/${r.showId}`}
-                  className="flex items-center gap-3 rounded-xl border border-white/5 bg-base-850/60 p-2.5 transition-colors duration-200 hover:bg-base-800/70"
+                  className="flex items-center gap-3 rounded-xl border border-hairline bg-base-850/60 p-2.5 transition-colors duration-200 hover:bg-base-800/70"
                 >
                   <div className="h-14 w-10 shrink-0 overflow-hidden rounded-md bg-base-800">
                     {r.showPosterPath && (
                       <img
                         src={posterUrl(r.showPosterPath, 'w185') ?? undefined}
                         alt=""
+                        loading="lazy"
+                        decoding="async"
                         className="h-full w-full object-cover"
                       />
                     )}
@@ -166,10 +168,10 @@ export default function Compare() {
                     <p className="truncate text-sm font-medium text-base-100">{r.showName}</p>
                   </div>
                   <div className="flex shrink-0 items-center gap-2 text-xs">
-                    <span className="rounded-md bg-white/5 px-1.5 py-1 text-base-200">
+                    <span className="rounded-md bg-hover-strong px-1.5 py-1 text-base-200">
                       You {r.mine.toFixed(1)}
                     </span>
-                    <span className="rounded-md bg-white/5 px-1.5 py-1 text-base-200">
+                    <span className="rounded-md bg-hover-strong px-1.5 py-1 text-base-200">
                       @{username} {r.theirs.toFixed(1)}
                     </span>
                   </div>
@@ -185,7 +187,7 @@ export default function Compare() {
 
 function StatCard({ label, value }: { label: string; value: string | number }) {
   return (
-    <div className="rounded-xl border border-white/5 bg-base-850/60 p-3.5 text-center">
+    <div className="rounded-xl border border-hairline bg-base-850/60 p-3.5 text-center">
       <p className="text-lg font-semibold text-base-100 sm:text-xl">{value}</p>
       <p className="mt-0.5 text-[11px] text-base-500">{label}</p>
     </div>

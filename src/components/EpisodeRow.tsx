@@ -37,7 +37,7 @@ export default function EpisodeRow({
       initial={{ opacity: 0, y: 6 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.25 }}
-      className={`group rounded-xl border border-white/5 bg-base-850/60 p-3 transition-colors duration-200 hover:bg-base-800/70 sm:p-4 ${
+      className={`group rounded-xl border border-hairline bg-base-850/60 p-3 transition-colors duration-200 hover:bg-base-800/70 sm:p-4 ${
         watched ? 'ring-1 ring-inset ring-accent-500/20' : ''
       }`}
     >
@@ -48,7 +48,13 @@ export default function EpisodeRow({
           className="relative aspect-video w-28 shrink-0 overflow-hidden rounded-lg bg-base-800 sm:w-40"
         >
           {still ? (
-            <img src={still} alt="" loading="lazy" className="h-full w-full object-cover" />
+            <img
+              src={still}
+              alt=""
+              loading="lazy"
+              decoding="async"
+              className="h-full w-full object-cover"
+            />
           ) : (
             <div className="flex h-full w-full items-center justify-center text-[10px] text-base-500">
               No image
@@ -89,7 +95,7 @@ export default function EpisodeRow({
               className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-medium transition-colors duration-200 disabled:opacity-60 ${
                 watched
                   ? 'border-accent-500/40 bg-accent-500/15 text-accent-300'
-                  : 'border-white/10 text-base-400 hover:border-white/25 hover:text-base-200'
+                  : 'border-hairline-strong text-base-400 hover:border-accent-500/40 hover:text-base-200'
               }`}
             >
               <CheckGlyph filled={watched} />

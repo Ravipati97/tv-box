@@ -1,20 +1,42 @@
-import { useState } from 'react'
+import { lazy, Suspense, useState } from 'react'
+import type { ReactNode } from 'react'
 import { HashRouter, Navigate, Route, Routes, useLocation } from 'react-router-dom'
 import { AnimatePresence } from 'framer-motion'
 import { AuthProvider, useAuth } from './contexts/AuthContext'
+import { ThemeProvider } from './contexts/ThemeContext'
 import ProtectedRoute from './components/ProtectedRoute'
 import Navbar from './components/Navbar'
 import PasscodeGate from './components/PasscodeGate'
 import { hasPassedGate, isGateConfigured } from './lib/siteGate'
 import Login from './pages/Login'
-import Home from './pages/Home'
-import Search from './pages/Search'
-import ShowDetail from './pages/ShowDetail'
-import Profile from './pages/Profile'
-import Members from './pages/Members'
-import PublicProfile from './pages/PublicProfile'
-import ShowDiary from './pages/ShowDiary'
-import Compare from './pages/Compare'
+
+// Every other page is code-split from the login bundle -- most sessions
+// only ever touch a couple of these, so there's no reason to ship all of
+// them (plus TMDB/Supabase calls, plus framer-motion usage) in the first
+// paint's JS.
+const Home = lazy(() => import('./pages/Home'))
+const Search = lazy(() => import('./pages/Search'))
+const ShowDetail = lazy(() => import('./pages/ShowDetail'))
+const Profile = lazy(() => import('./pages/Profile'))
+const Members = lazy(() => import('./pages/Members'))
+const PublicProfile = lazy(() => import('./pages/PublicProfile'))
+const ShowDiary = lazy(() => import('./pages/ShowDiary'))
+const Compare = lazy(() => import('./pages/Compare'))
+
+function PageLoader() {
+  return (
+    <div className="flex h-[70vh] items-center justify-center">
+      <div className="h-8 w-8 animate-spin rounded-full border-2 border-base-700 border-t-accent-400" />
+    </div>
+  )
+}
+
+/** Lazy pages need their own Suspense boundary that sits *inside* Routes,
+ * so Routes itself (keyed on pathname) stays AnimatePresence's direct
+ * child and route-change exit/enter animations keep working. */
+function Page({ children }: { children: ReactNode }) {
+  return <Suspense fallback={<PageLoader />}>{children}</Suspense>
+}
 
 function AppShell() {
   const { user, loading } = useAuth()
@@ -46,7 +68,9 @@ function AppShell() {
             path="/home"
             element={
               <ProtectedRoute>
-                <Home />
+                <Page>
+                  <Home />
+                </Page>
               </ProtectedRoute>
             }
           />
@@ -54,7 +78,9 @@ function AppShell() {
             path="/search"
             element={
               <ProtectedRoute>
-                <Search />
+                <Page>
+                  <Search />
+                </Page>
               </ProtectedRoute>
             }
           />
@@ -62,7 +88,9 @@ function AppShell() {
             path="/show/:id"
             element={
               <ProtectedRoute>
-                <ShowDetail />
+                <Page>
+                  <ShowDetail />
+                </Page>
               </ProtectedRoute>
             }
           />
@@ -70,7 +98,9 @@ function AppShell() {
             path="/profile"
             element={
               <ProtectedRoute>
-                <Profile />
+                <Page>
+                  <Profile />
+                </Page>
               </ProtectedRoute>
             }
           />
@@ -78,7 +108,9 @@ function AppShell() {
             path="/members"
             element={
               <ProtectedRoute>
-                <Members />
+                <Page>
+                  <Members />
+                </Page>
               </ProtectedRoute>
             }
           />
@@ -86,7 +118,9 @@ function AppShell() {
             path="/u/:username"
             element={
               <ProtectedRoute>
-                <PublicProfile />
+                <Page>
+                  <PublicProfile />
+                </Page>
               </ProtectedRoute>
             }
           />
@@ -94,7 +128,9 @@ function AppShell() {
             path="/u/:username/shows/:showId"
             element={
               <ProtectedRoute>
-                <ShowDiary />
+                <Page>
+                  <ShowDiary />
+                </Page>
               </ProtectedRoute>
             }
           />
@@ -102,7 +138,9 @@ function AppShell() {
             path="/compare/:username"
             element={
               <ProtectedRoute>
-                <Compare />
+                <Page>
+                  <Compare />
+                </Page>
               </ProtectedRoute>
             }
           />
@@ -116,10 +154,12 @@ function AppShell() {
 
 export default function App() {
   return (
-    <HashRouter>
-      <AuthProvider>
-        <AppShell />
-      </AuthProvider>
-    </HashRouter>
+    <ThemeProvider>
+      <HashRouter>
+        <AuthProvider>
+          <AppShell />
+        </AuthProvider>
+      </HashRouter>
+    </ThemeProvider>
   )
 }

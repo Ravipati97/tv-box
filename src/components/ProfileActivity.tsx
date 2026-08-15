@@ -125,7 +125,7 @@ export default function ProfileActivity({ userId, username }: ProfileActivityPro
         )}
       </div>
 
-      {error && <p className="mb-4 text-sm text-red-400">{error}</p>}
+      {error && <p className="mb-4 text-sm text-danger">{error}</p>}
 
       {loading ? (
         <div className="space-y-2">
@@ -162,13 +162,15 @@ export default function ProfileActivity({ userId, username }: ProfileActivityPro
                     >
                       <Link
                         to={`/show/${r.show_id}`}
-                        className="flex items-center gap-3 rounded-xl border border-white/5 bg-base-850/60 p-2.5 transition-colors duration-200 hover:bg-base-800/70"
+                        className="flex items-center gap-3 rounded-xl border border-hairline bg-base-850/60 p-2.5 transition-colors duration-200 hover:bg-base-800/70"
                       >
                         <div className="h-14 w-10 shrink-0 overflow-hidden rounded-md bg-base-800">
                           {r.show_poster_path && (
                             <img
                               src={posterUrl(r.show_poster_path, 'w185') ?? undefined}
                               alt=""
+                              loading="lazy"
+                              decoding="async"
                               className="h-full w-full object-cover"
                             />
                           )}
@@ -207,12 +209,13 @@ export default function ProfileActivity({ userId, username }: ProfileActivityPro
               transition={{ duration: 0.3, delay: Math.min(i, 12) * 0.02 }}
             >
               <Link to={`/u/${username}/shows/${s.showId}`} className="group block">
-                <div className="relative aspect-[2/3] overflow-hidden rounded-xl bg-base-800 ring-1 ring-white/5 transition-shadow duration-300 group-hover:shadow-[0_8px_30px_rgba(139,92,246,0.25)]">
+                <div className="relative aspect-[2/3] overflow-hidden rounded-2xl bg-base-800 ring-1 ring-hairline transition-all duration-300 group-hover:-translate-y-0.5 group-hover:shadow-[0_12px_32px_-8px_rgba(139,92,246,0.35)]">
                   {s.showPosterPath ? (
                     <img
                       src={posterUrl(s.showPosterPath) ?? undefined}
                       alt={s.showName}
                       loading="lazy"
+                      decoding="async"
                       className="h-full w-full object-cover transition-transform duration-500 ease-out group-hover:scale-[1.06]"
                     />
                   ) : (
@@ -274,7 +277,7 @@ function TabButton({
 
 function StatCard({ label, value }: { label: string; value: string | number }) {
   return (
-    <div className="rounded-xl border border-white/5 bg-base-850/60 p-3.5 text-center">
+    <div className="rounded-xl border border-hairline bg-base-850/60 p-3.5 text-center">
       <p className="text-lg font-semibold text-base-100 sm:text-xl">{value}</p>
       <p className="mt-0.5 text-[11px] text-base-500">{label}</p>
     </div>

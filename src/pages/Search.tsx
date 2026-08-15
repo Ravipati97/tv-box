@@ -82,17 +82,17 @@ export default function Search() {
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           placeholder="Search for a TV show…"
-          className="w-full rounded-xl border border-white/10 bg-base-850 py-3 pl-10 pr-4 text-base text-base-100 placeholder:text-base-500 transition-colors duration-200 focus:border-accent-500/60 sm:text-sm"
+          className="w-full rounded-xl border border-hairline-strong bg-base-850 py-3 pl-10 pr-4 text-base text-base-100 placeholder:text-base-500 transition-all duration-200 focus:border-accent-500/60 focus:ring-4 focus:ring-accent-500/10 sm:text-sm"
         />
       </div>
 
       {!isTmdbConfigured && (
-        <div className="mb-6 rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-300">
+        <div className="mb-6 rounded-lg border border-warning/30 bg-warning/10 px-3 py-2 text-xs text-warning">
           TMDB isn&apos;t configured yet. Set VITE_TMDB_API_KEY (see README) to enable search.
         </div>
       )}
 
-      {error && <p className="mb-4 text-sm text-red-400">{error}</p>}
+      {error && <p className="mb-4 text-sm text-danger">{error}</p>}
 
       {loading && <ShowGridSkeleton />}
 
@@ -110,11 +110,14 @@ export default function Search() {
                 ))}
             </motion.div>
           ) : hasSearched && !error ? (
-            <p className="mt-10 text-center text-sm text-base-500">
-              No shows found for &ldquo;{query}&rdquo;.
-            </p>
+            <div className="mt-14 flex flex-col items-center rounded-2xl border border-hairline bg-base-850/40 px-6 py-14 text-center">
+              <div className="mb-3 text-4xl">🔍</div>
+              <p className="text-sm text-base-500">
+                No shows found for &ldquo;{query}&rdquo;.
+              </p>
+            </div>
           ) : !query.trim() ? (
-            <div className="mt-16 flex flex-col items-center text-center">
+            <div className="mt-14 flex flex-col items-center rounded-2xl border border-hairline bg-base-850/40 px-6 py-14 text-center">
               <div className="mb-3 text-4xl">📺</div>
               <p className="text-sm text-base-500">
                 Search for any TV show to start rating episodes.

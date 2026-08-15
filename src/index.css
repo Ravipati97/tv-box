@@ -1,10 +1,16 @@
 @import "tailwindcss";
 
+/* Manual (class-based) dark mode instead of the media-query default, so the
+   in-app toggle can override the OS preference. */
+@custom-variant dark (&:where(.dark, .dark *));
+
 @theme {
   --font-sans: "Inter", ui-sans-serif, system-ui, -apple-system, sans-serif;
   --font-display: "Fraunces", ui-serif, Georgia, serif;
 
-  /* Base (dark) surface scale */
+  /* Base surface/text scale -- redefined per-theme below (.light overrides
+     these same variable names), so every component that already uses
+     bg-base-900 / text-base-200 / etc. gets both themes for free. */
   --color-base-950: #08080c;
   --color-base-900: #0d0d12;
   --color-base-850: #131318;
@@ -29,6 +35,21 @@
   --color-star: #ffb020;
   --color-star-dim: #4a3a1f;
 
+  /* Errors/destructive actions and configuration warnings -- Tailwind's
+     static red and amber shades don't flip with the theme, so text using
+     them needs its own token (e.g. amber-300 reads fine on near-black but
+     is almost invisible on white). */
+  --color-danger: #f87171;
+  --color-warning: #fcd34d;
+
+  /* Semantic overlay tokens -- theme-aware replacements for hardcoded
+     white/NN opacity utilities, used for hairline borders and hover fills
+     on chrome (not on photographic scrims, which stay literal black). */
+  --color-hairline: rgba(255, 255, 255, 0.07);
+  --color-hairline-strong: rgba(255, 255, 255, 0.13);
+  --color-hover: rgba(255, 255, 255, 0.05);
+  --color-hover-strong: rgba(255, 255, 255, 0.09);
+
   --animate-fade-in: fade-in 0.35s ease-out both;
   --animate-rise: rise 0.4s cubic-bezier(0.16, 1, 0.3, 1) both;
 
@@ -42,14 +63,54 @@
   }
 }
 
-html {
+:root {
   color-scheme: dark;
+  --glow: radial-gradient(ellipse 80% 50% at 50% -10%, rgba(139, 92, 246, 0.14), transparent);
+}
+
+/* Light theme -- same token names as the dark defaults above, just a
+   different (accessible, slate + violet) ramp. Toggled by adding/removing
+   this class on <html>; see ThemeContext + the boot script in index.html. */
+.light {
+  color-scheme: light;
+
+  --color-base-950: #f8fafc;
+  --color-base-900: #ffffff;
+  --color-base-850: #ffffff;
+  --color-base-800: #f1f5f9;
+  --color-base-750: #e7ebf1;
+  --color-base-700: #cbd5e1;
+  --color-base-600: #94a3b8;
+  --color-base-500: #64748b;
+  --color-base-400: #475569;
+  --color-base-300: #334155;
+  --color-base-200: #1e293b;
+  --color-base-100: #0f172a;
+
+  --color-accent-300: #7c3aed;
+  --color-accent-400: #7c3aed;
+  --color-accent-500: #7c3aed;
+  --color-accent-600: #6d28d9;
+  --color-accent-700: #5b21b6;
+
+  --color-star: #b45309;
+  --color-star-dim: #fde7bf;
+
+  --color-danger: #dc2626;
+  --color-warning: #b45309;
+
+  --color-hairline: rgba(15, 23, 42, 0.08);
+  --color-hairline-strong: rgba(15, 23, 42, 0.15);
+  --color-hover: rgba(15, 23, 42, 0.045);
+  --color-hover-strong: rgba(15, 23, 42, 0.075);
+
+  --glow: radial-gradient(ellipse 80% 50% at 50% -10%, rgba(124, 58, 237, 0.07), transparent);
 }
 
 body {
   background-color: var(--color-base-950);
-  background-image:
-    radial-gradient(ellipse 80% 50% at 50% -10%, rgba(139, 92, 246, 0.12), transparent);
+  background-image: var(--glow);
+  background-attachment: fixed;
   color: var(--color-base-200);
   font-family: var(--font-sans);
   -webkit-font-smoothing: antialiased;
@@ -57,6 +118,18 @@ body {
   /* Guard against any stray subpixel/negative-margin overflow causing a
      phantom horizontal scrollbar, especially on mobile. */
   overflow-x: hidden;
+}
+
+/* Smooth, cheap cross-fade when the theme flips. Utility classes with their
+   own transition-* declarations (a class selector) still win over this
+   universal selector, so per-component hover/interaction transitions are
+   unaffected -- this only fills in the gaps for static elements. */
+@media (prefers-reduced-motion: no-preference) {
+  * {
+    transition-property: background-color, border-color, color, fill, stroke, box-shadow;
+    transition-duration: 150ms;
+    transition-timing-function: ease;
+  }
 }
 
 * {

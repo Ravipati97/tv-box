@@ -1,8 +1,9 @@
 import { NavLink } from 'react-router-dom'
-import { motion } from 'framer-motion'
+import { AnimatePresence, motion } from 'framer-motion'
+import { useTheme } from '../contexts/ThemeContext'
 
 const linkBase =
-  'flex flex-col items-center justify-center gap-0.5 text-[11px] font-medium transition-colors duration-200 md:flex-row md:gap-1.5 md:text-sm md:px-3 md:py-1.5 md:rounded-full'
+  'relative flex flex-col items-center justify-center gap-0.5 text-[11px] font-medium transition-colors duration-200 md:flex-row md:gap-1.5 md:text-sm md:px-3.5 md:py-1.5 md:rounded-full'
 
 function HomeIcon({ active }: { active: boolean }) {
   return (
@@ -77,11 +78,63 @@ function UserIcon({ active }: { active: boolean }) {
   )
 }
 
+function SunIcon() {
+  return (
+    <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+      <circle cx="12" cy="12" r="4.5" />
+      <path d="M12 2.5v2.5M12 19v2.5M4.2 4.2l1.8 1.8M18 18l1.8 1.8M2.5 12H5M19 12h2.5M4.2 19.8L6 18M18 6l1.8-1.8" />
+    </svg>
+  )
+}
+
+function MoonIcon() {
+  return (
+    <svg width="17" height="17" viewBox="0 0 24 24" fill="currentColor" stroke="none">
+      <path d="M20.5 14.5A8.5 8.5 0 0 1 9.5 3.5a.6.6 0 0 0-.76-.76A9.7 9.7 0 1 0 21.26 15.26a.6.6 0 0 0-.76-.76Z" />
+    </svg>
+  )
+}
+
+function ThemeToggle() {
+  const { theme, toggleTheme } = useTheme()
+  const isDark = theme === 'dark'
+
+  return (
+    <button
+      type="button"
+      onClick={toggleTheme}
+      aria-label={isDark ? 'Switch to light mode' : 'Switch to dark mode'}
+      title={isDark ? 'Switch to light mode' : 'Switch to dark mode'}
+      className="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-full text-base-400 transition-colors duration-200 hover:bg-hover hover:text-base-100"
+    >
+      <AnimatePresence mode="wait" initial={false}>
+        <motion.span
+          key={theme}
+          initial={{ opacity: 0, rotate: -80, scale: 0.5 }}
+          animate={{ opacity: 1, rotate: 0, scale: 1 }}
+          exit={{ opacity: 0, rotate: 80, scale: 0.5 }}
+          transition={{ duration: 0.25, ease: [0.16, 1, 0.3, 1] }}
+          className="flex"
+        >
+          {isDark ? <SunIcon /> : <MoonIcon />}
+        </motion.span>
+      </AnimatePresence>
+    </button>
+  )
+}
+
+const NAV_ITEMS = [
+  { to: '/home', label: 'Home', Icon: HomeIcon },
+  { to: '/search', label: 'Search', Icon: SearchIcon },
+  { to: '/members', label: 'Members', Icon: PeopleIcon },
+  { to: '/profile', label: 'Profile', Icon: UserIcon },
+] as const
+
 export default function Navbar() {
   return (
     <>
       {/* Top bar (always visible) */}
-      <header className="sticky top-0 z-40 border-b border-white/5 bg-base-950/80 backdrop-blur-md">
+      <header className="sticky top-0 z-40 border-b border-hairline bg-base-950/80 backdrop-blur-md">
         <div className="mx-auto flex max-w-5xl items-center justify-between px-4 py-3 sm:px-6">
           <NavLink to="/home" className="flex items-center gap-2">
             <svg width="24" height="24" viewBox="0 0 32 32" fill="none">
@@ -94,60 +147,31 @@ export default function Navbar() {
             </span>
           </NavLink>
 
-          <nav className="hidden items-center gap-1 md:flex">
-            <NavLink
-              to="/home"
-              className={({ isActive }) =>
-                `${linkBase} ${isActive ? 'bg-white/5 text-base-100' : 'text-base-400 hover:text-base-100'}`
-              }
-            >
-              {({ isActive }) => (
-                <>
-                  <HomeIcon active={isActive} />
-                  Home
-                </>
-              )}
-            </NavLink>
-            <NavLink
-              to="/search"
-              className={({ isActive }) =>
-                `${linkBase} ${isActive ? 'bg-white/5 text-base-100' : 'text-base-400 hover:text-base-100'}`
-              }
-            >
-              {({ isActive }) => (
-                <>
-                  <SearchIcon active={isActive} />
-                  Search
-                </>
-              )}
-            </NavLink>
-            <NavLink
-              to="/members"
-              className={({ isActive }) =>
-                `${linkBase} ${isActive ? 'bg-white/5 text-base-100' : 'text-base-400 hover:text-base-100'}`
-              }
-            >
-              {({ isActive }) => (
-                <>
-                  <PeopleIcon active={isActive} />
-                  Members
-                </>
-              )}
-            </NavLink>
-            <NavLink
-              to="/profile"
-              className={({ isActive }) =>
-                `${linkBase} ${isActive ? 'bg-white/5 text-base-100' : 'text-base-400 hover:text-base-100'}`
-              }
-            >
-              {({ isActive }) => (
-                <>
-                  <UserIcon active={isActive} />
-                  Profile
-                </>
-              )}
-            </NavLink>
-          </nav>
+          <div className="flex items-center gap-1">
+            <nav className="hidden items-center gap-1 md:flex">
+              {NAV_ITEMS.map(({ to, label, Icon }) => (
+                <NavLink
+                  key={to}
+                  to={to}
+                  className={({ isActive }) =>
+                    `${linkBase} ${
+                      isActive
+                        ? 'bg-accent-500/10 text-accent-300'
+                        : 'text-base-400 hover:bg-hover hover:text-base-100'
+                    }`
+                  }
+                >
+                  {({ isActive }) => (
+                    <>
+                      <Icon active={isActive} />
+                      {label}
+                    </>
+                  )}
+                </NavLink>
+              ))}
+            </nav>
+            <ThemeToggle />
+          </div>
         </div>
       </header>
 
@@ -156,60 +180,31 @@ export default function Navbar() {
         initial={{ y: 20, opacity: 0 }}
         animate={{ y: 0, opacity: 1 }}
         transition={{ duration: 0.3 }}
-        className="fixed inset-x-0 bottom-0 z-40 flex border-t border-white/5 bg-base-950/90 pb-[env(safe-area-inset-bottom)] backdrop-blur-md md:hidden"
+        className="fixed inset-x-0 bottom-0 z-40 flex border-t border-hairline bg-base-950/90 pb-[env(safe-area-inset-bottom)] backdrop-blur-md md:hidden"
       >
-        <NavLink
-          to="/home"
-          className={({ isActive }) =>
-            `${linkBase} flex-1 py-2.5 ${isActive ? 'text-base-100' : 'text-base-400'}`
-          }
-        >
-          {({ isActive }) => (
-            <>
-              <HomeIcon active={isActive} />
-              Home
-            </>
-          )}
-        </NavLink>
-        <NavLink
-          to="/search"
-          className={({ isActive }) =>
-            `${linkBase} flex-1 py-2.5 ${isActive ? 'text-base-100' : 'text-base-400'}`
-          }
-        >
-          {({ isActive }) => (
-            <>
-              <SearchIcon active={isActive} />
-              Search
-            </>
-          )}
-        </NavLink>
-        <NavLink
-          to="/members"
-          className={({ isActive }) =>
-            `${linkBase} flex-1 py-2.5 ${isActive ? 'text-base-100' : 'text-base-400'}`
-          }
-        >
-          {({ isActive }) => (
-            <>
-              <PeopleIcon active={isActive} />
-              Members
-            </>
-          )}
-        </NavLink>
-        <NavLink
-          to="/profile"
-          className={({ isActive }) =>
-            `${linkBase} flex-1 py-2.5 ${isActive ? 'text-base-100' : 'text-base-400'}`
-          }
-        >
-          {({ isActive }) => (
-            <>
-              <UserIcon active={isActive} />
-              Profile
-            </>
-          )}
-        </NavLink>
+        {NAV_ITEMS.map(({ to, label, Icon }) => (
+          <NavLink
+            key={to}
+            to={to}
+            className={({ isActive }) =>
+              `${linkBase} flex-1 py-2.5 ${isActive ? 'text-accent-400' : 'text-base-400'}`
+            }
+          >
+            {({ isActive }) => (
+              <>
+                {isActive && (
+                  <motion.span
+                    layoutId="mobile-tab-dot"
+                    className="absolute top-0.5 h-1 w-1 rounded-full bg-accent-400"
+                    transition={{ type: 'spring', stiffness: 500, damping: 32 }}
+                  />
+                )}
+                <Icon active={isActive} />
+                {label}
+              </>
+            )}
+          </NavLink>
+        ))}
       </motion.nav>
     </>
   )

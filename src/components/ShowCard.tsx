@@ -18,12 +18,13 @@ export default function ShowCard({ show }: { show: TmdbShowSummary }) {
         className="group block"
         aria-label={`${show.name}${year ? ` (${year})` : ''}`}
       >
-        <div className="relative aspect-[2/3] overflow-hidden rounded-xl bg-base-800 ring-1 ring-white/5 transition-shadow duration-300 group-hover:shadow-[0_8px_30px_rgba(139,92,246,0.25)]">
+        <div className="relative aspect-[2/3] overflow-hidden rounded-2xl bg-base-800 ring-1 ring-hairline transition-all duration-300 group-hover:-translate-y-0.5 group-hover:shadow-[0_12px_32px_-8px_rgba(139,92,246,0.35)]">
           {poster ? (
             <img
               src={poster}
               alt={show.name}
               loading="lazy"
+              decoding="async"
               className="h-full w-full object-cover transition-transform duration-500 ease-out group-hover:scale-[1.06]"
             />
           ) : (
