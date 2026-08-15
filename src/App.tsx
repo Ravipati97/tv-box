@@ -23,6 +23,7 @@ const Members = lazy(() => import('./pages/Members'))
 const PublicProfile = lazy(() => import('./pages/PublicProfile'))
 const ShowDiary = lazy(() => import('./pages/ShowDiary'))
 const Compare = lazy(() => import('./pages/Compare'))
+const ListDetail = lazy(() => import('./pages/ListDetail'))
 
 function PageLoader() {
   return (
@@ -151,6 +152,16 @@ function AppShell() {
               <ProtectedRoute>
                 <Page>
                   <Compare />
+                </Page>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/u/:username/lists/:listId"
+            element={
+              <ProtectedRoute>
+                <Page>
+                  <ListDetail />
                 </Page>
               </ProtectedRoute>
             }

@@ -6,6 +6,7 @@ import EpisodeRow from '../components/EpisodeRow'
 import RatingSummary from '../components/RatingSummary'
 import DateMarkControl from '../components/DateMarkControl'
 import UndoToast from '../components/UndoToast'
+import AddToListPicker from '../components/AddToListPicker'
 import { EpisodeRowSkeleton } from '../components/Skeletons'
 import {
   backdropUrl,
@@ -37,6 +38,7 @@ import { clearStreamingOverride, fetchStreamingOverride, setStreamingOverride } 
 import { invalidatePlatformCache, pickBestFreeProvider } from '../lib/streamingProvider'
 import { addToWatchlist, fetchWatchlistItem, removeFromWatchlist } from '../lib/watchlist'
 import { deleteRewatch, fetchRewatchesForShow, logRewatch } from '../lib/rewatches'
+import { fetchListMembershipForShow } from '../lib/lists'
 import { formatShortDate } from '../lib/date'
 import { useAuth } from '../contexts/AuthContext'
 import type {
@@ -88,6 +90,8 @@ export default function ShowDetail() {
   const [savingWatchlist, setSavingWatchlist] = useState(false)
   const [rewatches, setRewatches] = useState<ShowRewatch[]>([])
   const [loggingRewatch, setLoggingRewatch] = useState(false)
+  const [listMembership, setListMembership] = useState<Set<string>>(new Set())
+  const [listPickerOpen, setListPickerOpen] = useState(false)
 
   // Load show detail + my watch progress + everyone's show/season ratings, in parallel.
   useEffect(() => {
@@ -97,14 +101,16 @@ export default function ShowDetail() {
 
     async function load() {
       try {
-        const [showData, watchedMap, ratings, seasonRatingRows, watchlistRow, rewatchRows] = await Promise.all([
-          getShowDetail(showId),
-          user ? fetchWatchedForShow(user.id, showId) : Promise.resolve({}),
-          fetchAllShowRatings(showId),
-          fetchAllSeasonRatingsForShow(showId),
-          user ? fetchWatchlistItem(user.id, showId) : Promise.resolve(null),
-          user ? fetchRewatchesForShow(user.id, showId) : Promise.resolve([]),
-        ])
+        const [showData, watchedMap, ratings, seasonRatingRows, watchlistRow, rewatchRows, listMembershipSet] =
+          await Promise.all([
+            getShowDetail(showId),
+            user ? fetchWatchedForShow(user.id, showId) : Promise.resolve({}),
+            fetchAllShowRatings(showId),
+            fetchAllSeasonRatingsForShow(showId),
+            user ? fetchWatchlistItem(user.id, showId) : Promise.resolve(null),
+            user ? fetchRewatchesForShow(user.id, showId) : Promise.resolve([]),
+            user ? fetchListMembershipForShow(user.id, showId) : Promise.resolve(new Set<string>()),
+          ])
         if (cancelled) return
         setShow(showData)
         setWatched(watchedMap)
@@ -112,6 +118,7 @@ export default function ShowDetail() {
         setSeasonRatings(seasonRatingRows)
         setWatchlistItem(watchlistRow)
         setRewatches(rewatchRows)
+        setListMembership(listMembershipSet)
         const firstRealSeason = showData.seasons.find((s) => s.season_number > 0) ?? showData.seasons[0]
         setActiveSeason(firstRealSeason ? firstRealSeason.season_number : null)
       } catch (err) {
@@ -661,6 +668,35 @@ export default function ShowDetail() {
               <BookmarkGlyph filled={Boolean(watchlistItem)} />
               {watchlistItem ? 'On your watchlist' : 'Add to watchlist'}
             </button>
+
+            <button
+              type="button"
+              onClick={() => setListPickerOpen((v) => !v)}
+              className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-medium transition-colors duration-200 ${
+                listMembership.size > 0
+                  ? 'border-accent-500/40 bg-accent-500/15 text-accent-300'
+                  : 'border-hairline-strong text-base-400 hover:border-accent-500/40 hover:text-base-200'
+              }`}
+            >
+              <ListGlyph />
+              {listMembership.size > 0
+                ? `On ${listMembership.size} list${listMembership.size === 1 ? '' : 's'}`
+                : 'Add to a list'}
+            </button>
+          </div>
+        )}
+
+        {listPickerOpen && user && show && (
+          <div className="max-w-md">
+            <AddToListPicker
+              userId={user.id}
+              showId={show.id}
+              showName={show.name}
+              showPosterPath={show.poster_path}
+              memberOf={listMembership}
+              onChange={setListMembership}
+              onClose={() => setListPickerOpen(false)}
+            />
           </div>
         )}
 
@@ -910,6 +946,19 @@ export default function ShowDetail() {
         />
       )}
     </div>
+  )
+}
+
+function ListGlyph() {
+  return (
+    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" className="shrink-0">
+      <path
+        d="M4 6h16M4 12h16M4 18h10"
+        stroke="currentColor"
+        strokeWidth="1.8"
+        strokeLinecap="round"
+      />
+    </svg>
   )
 }
 

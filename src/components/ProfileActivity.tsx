@@ -6,11 +6,12 @@ import { fetchRecentShowRatings } from '../lib/showRatings'
 import { fetchRecentWatched } from '../lib/watched'
 import { summarizeShowActivity, watchHistory } from '../lib/showActivity'
 import { fetchWatchlist, removeFromWatchlist } from '../lib/watchlist'
+import { createList, fetchListsForUser } from '../lib/lists'
 import { posterUrl } from '../lib/tmdb'
 import { dayKey, formatDiaryHeading, formatShortDate } from '../lib/date'
 import { useAuth } from '../contexts/AuthContext'
 import HistorySection from './HistorySection'
-import type { EpisodeWatched, ShowRating, WatchlistItem } from '../types'
+import type { EpisodeWatched, ShowListWithCount, ShowRating, WatchlistItem } from '../types'
 
 interface ProfileActivityProps {
   userId: string
@@ -22,7 +23,7 @@ interface DiaryGroup {
   items: ShowRating[]
 }
 
-type Tab = 'diary' | 'history' | 'watchlist'
+type Tab = 'diary' | 'history' | 'watchlist' | 'lists'
 
 export default function ProfileActivity({ userId, username }: ProfileActivityProps) {
   const { user: me } = useAuth()
@@ -31,6 +32,10 @@ export default function ProfileActivity({ userId, username }: ProfileActivityPro
   const [ratings, setRatings] = useState<ShowRating[]>([])
   const [watched, setWatched] = useState<EpisodeWatched[]>([])
   const [watchlist, setWatchlist] = useState<WatchlistItem[]>([])
+  const [lists, setLists] = useState<ShowListWithCount[]>([])
+  const [creatingList, setCreatingList] = useState(false)
+  const [newListName, setNewListName] = useState('')
+  const [savingList, setSavingList] = useState(false)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
@@ -42,12 +47,14 @@ export default function ProfileActivity({ userId, username }: ProfileActivityPro
       fetchRecentShowRatings(userId, 2000),
       fetchRecentWatched(userId, 2000),
       fetchWatchlist(userId),
+      fetchListsForUser(userId),
     ])
-      .then(([ratingRows, watchedRows, watchlistRows]) => {
+      .then(([ratingRows, watchedRows, watchlistRows, listRows]) => {
         if (!cancelled) {
           setRatings(ratingRows)
           setWatched(watchedRows)
           setWatchlist(watchlistRows)
+          setLists(listRows)
         }
       })
       .catch((err) => {
@@ -64,6 +71,20 @@ export default function ProfileActivity({ userId, username }: ProfileActivityPro
   async function handleRemoveFromWatchlist(showId: number) {
     setWatchlist((prev) => prev.filter((w) => w.show_id !== showId))
     await removeFromWatchlist(userId, showId)
+  }
+
+  async function handleCreateList() {
+    const name = newListName.trim()
+    if (!name) return
+    setSavingList(true)
+    try {
+      const list = await createList(userId, name)
+      setLists((prev) => [{ ...list, itemCount: 0 }, ...prev])
+      setNewListName('')
+      setCreatingList(false)
+    } finally {
+      setSavingList(false)
+    }
   }
 
   const activity = useMemo(() => summarizeShowActivity(ratings, watched), [ratings, watched])
@@ -116,6 +137,9 @@ export default function ProfileActivity({ userId, username }: ProfileActivityPro
         </TabButton>
         <TabButton active={tab === 'watchlist'} onClick={() => setTab('watchlist')}>
           Watchlist
+        </TabButton>
+        <TabButton active={tab === 'lists'} onClick={() => setTab('lists')}>
+          Lists
         </TabButton>
       </div>
 
@@ -191,60 +215,137 @@ export default function ProfileActivity({ userId, username }: ProfileActivityPro
           username={username}
           emptyMessage="Nothing finished yet. Shows show up here once every episode is watched, or once they're rated."
         />
-      ) : watchlist.length === 0 ? (
-        <div className="mt-10 flex flex-col items-center text-center">
-          <div className="mb-3 text-4xl">🔖</div>
-          <p className="text-sm text-base-500">
-            {isMe ? "Nothing on your watchlist yet. " : 'Nothing here yet. '}
-            {isMe && (
-              <>
-                <Link to="/search" className="text-accent-400 hover:underline">
-                  Find a show
-                </Link>{' '}
-                to save one for later.
-              </>
-            )}
-          </p>
-        </div>
-      ) : (
-        <ul className="space-y-2">
-          {watchlist.map((w, i) => (
-            <motion.li
-              key={w.id}
-              initial={{ opacity: 0, y: 6 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.25, delay: Math.min(i, 8) * 0.02 }}
-              className="flex items-center gap-3 rounded-xl border border-hairline bg-base-850/60 p-2.5"
-            >
-              <Link to={`/show/${w.show_id}`} className="flex min-w-0 flex-1 items-center gap-3">
-                <div className="h-14 w-10 shrink-0 overflow-hidden rounded-md bg-base-800">
-                  {w.show_poster_path && (
-                    <img
-                      src={posterUrl(w.show_poster_path, 'w185') ?? undefined}
-                      alt=""
-                      loading="lazy"
-                      decoding="async"
-                      className="h-full w-full object-cover"
-                    />
-                  )}
-                </div>
-                <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm font-medium text-base-100">{w.show_name}</p>
-                  <p className="text-xs text-base-400">Added {formatShortDate(w.added_at)}</p>
-                </div>
-              </Link>
+      ) : tab === 'watchlist' ? (
+        watchlist.length === 0 ? (
+          <div className="mt-10 flex flex-col items-center text-center">
+            <div className="mb-3 text-4xl">🔖</div>
+            <p className="text-sm text-base-500">
+              {isMe ? "Nothing on your watchlist yet. " : 'Nothing here yet. '}
               {isMe && (
+                <>
+                  <Link to="/search" className="text-accent-400 hover:underline">
+                    Find a show
+                  </Link>{' '}
+                  to save one for later.
+                </>
+              )}
+            </p>
+          </div>
+        ) : (
+          <ul className="space-y-2">
+            {watchlist.map((w, i) => (
+              <motion.li
+                key={w.id}
+                initial={{ opacity: 0, y: 6 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.25, delay: Math.min(i, 8) * 0.02 }}
+                className="flex items-center gap-3 rounded-xl border border-hairline bg-base-850/60 p-2.5"
+              >
+                <Link to={`/show/${w.show_id}`} className="flex min-w-0 flex-1 items-center gap-3">
+                  <div className="h-14 w-10 shrink-0 overflow-hidden rounded-md bg-base-800">
+                    {w.show_poster_path && (
+                      <img
+                        src={posterUrl(w.show_poster_path, 'w185') ?? undefined}
+                        alt=""
+                        loading="lazy"
+                        decoding="async"
+                        className="h-full w-full object-cover"
+                      />
+                    )}
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm font-medium text-base-100">{w.show_name}</p>
+                    <p className="text-xs text-base-400">Added {formatShortDate(w.added_at)}</p>
+                  </div>
+                </Link>
+                {isMe && (
+                  <button
+                    type="button"
+                    onClick={() => handleRemoveFromWatchlist(w.show_id)}
+                    className="shrink-0 text-xs text-base-500 hover:text-danger"
+                  >
+                    Remove
+                  </button>
+                )}
+              </motion.li>
+            ))}
+          </ul>
+        )
+      ) : (
+        <div>
+          {isMe && (
+            <div className="mb-4">
+              {creatingList ? (
+                <div className="flex items-center gap-1.5">
+                  <input
+                    autoFocus
+                    type="text"
+                    value={newListName}
+                    onChange={(e) => setNewListName(e.target.value)}
+                    placeholder="List name"
+                    className="w-full max-w-xs rounded-lg border border-hairline-strong bg-base-900 px-2.5 py-1.5 text-xs text-base-200 placeholder:text-base-600"
+                  />
+                  <button
+                    type="button"
+                    disabled={!newListName.trim() || savingList}
+                    onClick={handleCreateList}
+                    className="shrink-0 rounded-lg bg-accent-500/15 px-2.5 py-1.5 text-xs font-medium text-accent-300 ring-1 ring-accent-500/40 disabled:opacity-50"
+                  >
+                    Create
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setCreatingList(false)}
+                    className="shrink-0 text-xs text-base-500 hover:text-base-300"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              ) : (
                 <button
                   type="button"
-                  onClick={() => handleRemoveFromWatchlist(w.show_id)}
-                  className="shrink-0 text-xs text-base-500 hover:text-danger"
+                  onClick={() => setCreatingList(true)}
+                  className="text-xs text-accent-400 hover:underline"
                 >
-                  Remove
+                  + New list
                 </button>
               )}
-            </motion.li>
-          ))}
-        </ul>
+            </div>
+          )}
+
+          {lists.length === 0 ? (
+            <div className="mt-6 flex flex-col items-center text-center">
+              <div className="mb-3 text-4xl">📋</div>
+              <p className="text-sm text-base-500">No lists yet.</p>
+            </div>
+          ) : (
+            <ul className="space-y-2">
+              {lists.map((l, i) => (
+                <motion.li
+                  key={l.id}
+                  initial={{ opacity: 0, y: 6 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.25, delay: Math.min(i, 8) * 0.02 }}
+                >
+                  <Link
+                    to={`/u/${username}/lists/${l.id}`}
+                    className="flex items-center justify-between rounded-xl border border-hairline bg-base-850/60 p-3 transition-colors duration-200 hover:bg-base-800/70"
+                  >
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-medium text-base-100">{l.name}</p>
+                      {l.description && (
+                        <p className="truncate text-xs text-base-500">{l.description}</p>
+                      )}
+                    </div>
+                    <span className="shrink-0 text-xs text-base-500">
+                      {l.itemCount} show{l.itemCount === 1 ? '' : 's'}
+                    </span>
+                  </Link>
+                </motion.li>
+              ))}
+            </ul>
+          )}
+        </div>
       )}
     </div>
   )
