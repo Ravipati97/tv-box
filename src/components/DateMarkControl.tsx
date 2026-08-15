@@ -5,23 +5,20 @@ import { UNKNOWN_WATCHED_AT } from '../lib/watched'
  * A small text trigger that expands into a date picker + confirm, so any
  * "mark watched" action -- bulk (whole show/season), starting a show fresh,
  * or a single episode -- can land on the right date in History instead of
- * defaulting to today. Shared so all three contexts stay visually and
+ * defaulting to today. Shared so all contexts stay visually and
  * behaviorally identical.
  *
- * `confirmMessage` is optional: bulk actions (which can touch dozens of
- * rows) pass one so there's a native confirm() before committing, while
- * single-episode actions skip it -- the inline Confirm button click is
- * already the confirmation step, and a second native dialog would just be
- * friction for something this small and easy to undo.
+ * No native confirm() dialog -- the inline Confirm button click, after
+ * explicitly opening this control and picking a date, is already the
+ * confirmation step. A second native popup on top of that is just friction,
+ * even for the bulk actions.
  */
 export default function DateMarkControl({
   label,
-  confirmMessage,
   onConfirm,
   className,
 }: {
   label: string
-  confirmMessage?: string
   onConfirm: (input: { watchedAt: string; unknownDate: boolean }) => Promise<void>
   className?: string
 }) {
@@ -58,7 +55,6 @@ export default function DateMarkControl({
           type="button"
           disabled={saving}
           onClick={async () => {
-            if (confirmMessage && !window.confirm(confirmMessage)) return
             setSaving(true)
             try {
               await onConfirm({

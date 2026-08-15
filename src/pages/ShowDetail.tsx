@@ -488,7 +488,6 @@ export default function ShowDetail() {
                 )}
                 <DateMarkControl
                   label="Seen this before? Mark it all watched"
-                  confirmMessage={`Mark all ${totalEpisodes} episodes of ${show.name} as watched?`}
                   onConfirm={handleMarkAllWatched}
                 />
               </div>
@@ -593,11 +592,7 @@ export default function ShowDetail() {
                     {seasonWatchedCount}/{season.episodes.length} watched
                   </span>
                   {seasonWatchedCount < season.episodes.length && (
-                    <DateMarkControl
-                      label="Mark season watched"
-                      confirmMessage={`Mark all of ${season.name} as watched?`}
-                      onConfirm={handleMarkSeasonWatched}
-                    />
+                    <DateMarkControl label="Mark season watched" onConfirm={handleMarkSeasonWatched} />
                   )}
                 </div>
               )}
