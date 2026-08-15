@@ -14,15 +14,56 @@ export function dedupeProviders(list: TmdbWatchProvider[]): TmdbWatchProvider[] 
     .sort((a, b) => a.display_priority - b.display_priority)
 }
 
+/** Matches JustWatch/TMDB's "resold through someone else's storefront" listings
+ * -- e.g. "HBO Max Amazon Channel", "Starz Apple TV Channel", "Crave Amazon
+ * Channel". These are the *same* underlying service as their plain-name
+ * counterpart (just billed through Amazon/Apple TV/Roku's add-on channel
+ * system instead of directly), but JustWatch's own display_priority often
+ * ranks the reseller listing *ahead* of the direct one -- e.g. for Friends
+ * in the US, "HBO Max Amazon Channel" (priority 11) outranks plain "HBO Max"
+ * (priority 152), plus the reseller entry carries its own, different logo
+ * asset. Picking flatrate[0] blindly then surfaces an unfamiliar name and a
+ * mismatched icon for a show that's plainly "just on HBO Max". Deliberately
+ * excludes "The Roku Channel" (a real standalone free service, not a resold
+ * add-on) -- only "<Base> Roku Premium Channel" matches. Some real TMDB
+ * entries have stray trailing whitespace or inconsistent capitalization
+ * ("ALLBLK Amazon channel ", "BBC Select Apple Tv channel") -- callers must
+ * trim before testing; the `i` flag alone covers the casing. */
+const RESELLER_CHANNEL_SUFFIX = /\s(Amazon|Apple TV|Roku Premium|Prime Video|Google Play)\s*Channel$/i
+
+/** Live-TV / cable-replacement bundles (YouTube TV, fuboTV, Sling, Philo,
+ * DirecTV Stream, Hulu + Live TV). JustWatch lists these as "flatrate" when
+ * a show also airs as reruns on a cable network the bundle carries (e.g.
+ * Friends via TBS, inside YouTube TV's channel lineup), and sometimes ranks
+ * them above the show's actual streaming home. A $70-90/mo live-TV bundle
+ * is a different value proposition than "you already have this app" though,
+ * so it's deprioritized the same way as reseller channels. */
+const LIVE_TV_BUNDLE = /^(YouTube ?TV|fubo ?TV|Sling ?TV|Philo|DirecTV( Stream)?|Hulu\s*\+?\s*Live ?TV|Vidgo|Frndly ?TV)\b/i
+
+function isLowSignalProvider(providerName: string): boolean {
+  const name = providerName.trim()
+  return RESELLER_CHANNEL_SUFFIX.test(name) || LIVE_TV_BUNDLE.test(name)
+}
+
+/** The first provider in priority order that isn't a reseller-channel or
+ * live-TV-bundle listing, falling back to the top overall listing if
+ * that's genuinely the only way to watch (some smaller platforms are only
+ * ever offered bundled, with no direct/standalone option anywhere). */
+function pickDirect(list: TmdbWatchProvider[]): TmdbWatchProvider | null {
+  if (list.length === 0) return null
+  return list.find((p) => !isLowSignalProvider(p.provider_name)) ?? list[0]
+}
+
 /** The single best-guess "free to you" provider for a region -- included with a
  * subscription first, then genuinely free/ad-supported. Deliberately never
  * rent/buy: those cost extra, so they're not "free" by any reading. */
 export function pickBestFreeProvider(region: TmdbWatchProviderRegion | null): TmdbWatchProvider | null {
   if (!region) return null
   const flatrate = dedupeProviders(region.flatrate ?? [])
-  if (flatrate.length > 0) return flatrate[0]
+  const direct = pickDirect(flatrate)
+  if (direct) return direct
   const free = dedupeProviders([...(region.free ?? []), ...(region.ads ?? [])])
-  return free[0] ?? null
+  return pickDirect(free)
 }
 
 export interface ResolvedProvider {
