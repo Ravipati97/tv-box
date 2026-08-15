@@ -8,11 +8,13 @@ import { summarizeShowActivity, nowWatching, watchHistory, buildGroupActivity } 
 import type { GroupActivityEvent } from '../lib/showActivity'
 import { computeSeasonProgress, fetchSeasonBreakdowns } from '../lib/seasonProgress'
 import type { SeasonProgress } from '../lib/seasonProgress'
+import { useStreamingPlatforms } from '../hooks/useStreamingPlatforms'
 import { posterUrl } from '../lib/tmdb'
 import { formatShortDate } from '../lib/date'
 import HistorySection from '../components/HistorySection'
 import ActivityRow from '../components/ActivityRow'
 import SeasonProgressBar from '../components/SeasonProgressBar'
+import StreamingBadge from '../components/StreamingBadge'
 import type { EpisodeWatched, ShowRating } from '../types'
 
 function greeting(): string {
@@ -92,7 +94,9 @@ export default function Home() {
   }, [watched])
 
   const [seasonProgress, setSeasonProgress] = useState<Map<number, SeasonProgress>>(new Map())
-  const watchingKey = watching.map((s) => s.showId).join(',')
+  const watchingIds = useMemo(() => watching.map((s) => s.showId), [watching])
+  const watchingKey = watchingIds.join(',')
+  const { platforms } = useStreamingPlatforms(watchingIds)
 
   useEffect(() => {
     if (!watchingKey) {
@@ -190,6 +194,7 @@ export default function Home() {
                         {s.showName}
                       </div>
                     )}
+                    <StreamingBadge provider={platforms.get(s.showId)} />
                   </div>
                   <p className="mt-2 truncate text-sm font-medium text-base-100">{s.showName}</p>
                   <p className="text-xs text-base-400">

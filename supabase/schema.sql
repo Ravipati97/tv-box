@@ -128,6 +128,53 @@ create policy "Anyone can delete show ratings"
   on public.show_ratings for delete
   using (true);
 
+-- One rating per person per *season*, independent of show_ratings above --
+-- lets "the show's a 4 overall but season 2 was rough" be expressed, the
+-- way IMDb/Rotten Tomatoes surface season-level scores alongside a show's
+-- overall one. Deliberately not averaged into or derived from show_ratings
+-- (or vice versa) -- both are separate, manually-set opinions.
+create table if not exists public.season_ratings (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references public.users(id) on delete cascade,
+
+  show_id integer not null,
+  show_name text not null,
+  show_poster_path text,
+  season_number integer not null,
+  season_name text,
+
+  rating numeric(2,1) not null check (rating >= 0.5 and rating <= 5),
+  rated_at timestamptz not null default now(),
+
+  unique (user_id, show_id, season_number)
+);
+
+create index if not exists season_ratings_user_id_idx on public.season_ratings (user_id);
+create index if not exists season_ratings_user_show_idx on public.season_ratings (user_id, show_id);
+
+alter table public.season_ratings enable row level security;
+
+drop policy if exists "Anyone can read season ratings" on public.season_ratings;
+create policy "Anyone can read season ratings"
+  on public.season_ratings for select
+  using (true);
+
+drop policy if exists "Anyone can insert season ratings" on public.season_ratings;
+create policy "Anyone can insert season ratings"
+  on public.season_ratings for insert
+  with check (true);
+
+drop policy if exists "Anyone can update season ratings" on public.season_ratings;
+create policy "Anyone can update season ratings"
+  on public.season_ratings for update
+  using (true)
+  with check (true);
+
+drop policy if exists "Anyone can delete season ratings" on public.season_ratings;
+create policy "Anyone can delete season ratings"
+  on public.season_ratings for delete
+  using (true);
+
 -- One row per episode a person has marked watched -- powers per-show "12/24
 -- watched" progress and (soon) a Now Watching home view. show_total_episodes
 -- is a denormalized snapshot of TMDB's episode count at the time of the most

@@ -1,8 +1,9 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
 import ShowCard from '../components/ShowCard'
 import { ShowGridSkeleton } from '../components/Skeletons'
 import { searchShows, isTmdbConfigured } from '../lib/tmdb'
+import { useStreamingPlatforms } from '../hooks/useStreamingPlatforms'
 import type { TmdbShowSummary } from '../types'
 
 export default function Search() {
@@ -13,6 +14,12 @@ export default function Search() {
   const [hasSearched, setHasSearched] = useState(false)
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const requestId = useRef(0)
+
+  const resultIds = useMemo(
+    () => results.filter((s) => s.poster_path).map((s) => s.id),
+    [results],
+  )
+  const { platforms } = useStreamingPlatforms(resultIds)
 
   useEffect(() => {
     if (debounceRef.current) clearTimeout(debounceRef.current)
@@ -106,7 +113,7 @@ export default function Search() {
               {results
                 .filter((s) => s.poster_path)
                 .map((show) => (
-                  <ShowCard key={show.id} show={show} />
+                  <ShowCard key={show.id} show={show} provider={platforms.get(show.id)} />
                 ))}
             </motion.div>
           ) : hasSearched && !error ? (

@@ -1,11 +1,12 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import type { HistorySort, ShowActivity } from '../lib/showActivity'
 import { sortHistory } from '../lib/showActivity'
-import { detectRegion, posterUrl, providerLogoUrl } from '../lib/tmdb'
-import { resolveShowPlatforms } from '../lib/streamingProvider'
+import { posterUrl, providerLogoUrl } from '../lib/tmdb'
 import type { ResolvedProvider } from '../lib/streamingProvider'
+import { useStreamingPlatforms } from '../hooks/useStreamingPlatforms'
+import StreamingBadge from './StreamingBadge'
 import { formatShortDate } from '../lib/date'
 
 const SORT_LABELS: Record<HistorySort, string> = {
@@ -37,27 +38,11 @@ export default function HistorySection({
   defaultSort = 'recent',
 }: HistorySectionProps) {
   const [sort, setSort] = useState<HistorySort>(defaultSort)
-  const [platforms, setPlatforms] = useState<Map<number, ResolvedProvider | null> | null>(null)
-  const [loadingPlatforms, setLoadingPlatforms] = useState(false)
 
   const showIds = useMemo(() => activity.map((s) => s.showId), [activity])
-
-  useEffect(() => {
-    if (sort !== 'platform' || showIds.length === 0) return
-    let cancelled = false
-    setLoadingPlatforms(true)
-    resolveShowPlatforms(showIds, detectRegion())
-      .then((map) => {
-        if (!cancelled) setPlatforms(map)
-      })
-      .finally(() => {
-        if (!cancelled) setLoadingPlatforms(false)
-      })
-    return () => {
-      cancelled = true
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sort, showIds.join(',')])
+  // Resolved unconditionally (not just for the "Platform" sort) -- every
+  // card gets a streaming badge regardless of how the grid's currently sorted.
+  const { platforms, loading: loadingPlatforms } = useStreamingPlatforms(showIds)
 
   const flatSorted = useMemo(
     () => (sort === 'platform' ? [] : sortHistory(activity, sort)),
@@ -65,7 +50,7 @@ export default function HistorySection({
   )
 
   const groupedByPlatform = useMemo(() => {
-    if (sort !== 'platform' || !platforms) return null
+    if (sort !== 'platform') return null
     const groups = new Map<string, { provider: ResolvedProvider | null; shows: ShowActivity[] }>()
     for (const s of activity) {
       const provider = platforms.get(s.showId) ?? null
@@ -115,7 +100,7 @@ export default function HistorySection({
       </div>
 
       {sort === 'platform' ? (
-        loadingPlatforms && !platforms ? (
+        loadingPlatforms && platforms.size === 0 ? (
           <div className="grid grid-cols-2 gap-x-4 gap-y-6 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
             {Array.from({ length: 5 }).map((_, i) => (
               <div key={i} className="animate-pulse">
@@ -144,7 +129,13 @@ export default function HistorySection({
                 </div>
                 <div className="grid grid-cols-2 gap-x-4 gap-y-6 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
                   {group.shows.map((s, i) => (
-                    <HistoryCard key={s.showId} show={s} username={username} index={i} />
+                    <HistoryCard
+                      key={s.showId}
+                      show={s}
+                      username={username}
+                      index={i}
+                      provider={platforms.get(s.showId)}
+                    />
                   ))}
                 </div>
               </div>
@@ -154,7 +145,7 @@ export default function HistorySection({
       ) : (
         <div className="grid grid-cols-2 gap-x-4 gap-y-6 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
           {flatSorted.map((s, i) => (
-            <HistoryCard key={s.showId} show={s} username={username} index={i} />
+            <HistoryCard key={s.showId} show={s} username={username} index={i} provider={platforms.get(s.showId)} />
           ))}
         </div>
       )}
@@ -162,7 +153,17 @@ export default function HistorySection({
   )
 }
 
-function HistoryCard({ show: s, username, index }: { show: ShowActivity; username: string; index: number }) {
+function HistoryCard({
+  show: s,
+  username,
+  index,
+  provider,
+}: {
+  show: ShowActivity
+  username: string
+  index: number
+  provider?: ResolvedProvider | null
+}) {
   return (
     <motion.div
       initial={{ opacity: 0, y: 10 }}
@@ -184,6 +185,7 @@ function HistoryCard({ show: s, username, index }: { show: ShowActivity; usernam
               {s.showName}
             </div>
           )}
+          <StreamingBadge provider={provider} />
           <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/85 to-transparent px-2 pb-1.5 pt-4">
             {s.rating !== null ? (
               <div className="flex items-center gap-1 text-[11px] font-semibold text-star">

@@ -121,6 +121,26 @@ export interface ShowRatingWithUser extends ShowRating {
   users: { username: string } | null
 }
 
+/** One person's rating for a single season -- independent of ShowRating
+ * above, the way IMDb/Rotten Tomatoes show a season score next to a show's
+ * overall one. */
+export interface SeasonRating {
+  id: string
+  user_id: string
+  show_id: number
+  show_name: string
+  show_poster_path: string | null
+  season_number: number
+  season_name: string | null
+  rating: number
+  rated_at: string
+}
+
+/** A season_ratings row joined with the rater's username (crowd view). */
+export interface SeasonRatingWithUser extends SeasonRating {
+  users: { username: string } | null
+}
+
 /** One episode a person has marked watched. Presence = watched; no value/score. */
 export interface EpisodeWatched {
   id: string

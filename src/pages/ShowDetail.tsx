@@ -1,9 +1,9 @@
 import { useEffect, useMemo, useState } from 'react'
-import { useParams, Link } from 'react-router-dom'
+import { useParams } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import SeasonTabs from '../components/SeasonTabs'
 import EpisodeRow from '../components/EpisodeRow'
-import StarRating from '../components/StarRating'
+import RatingSummary from '../components/RatingSummary'
 import DateMarkControl from '../components/DateMarkControl'
 import { EpisodeRowSkeleton } from '../components/Skeletons'
 import {
@@ -18,11 +18,17 @@ import {
   yearFromDate,
 } from '../lib/tmdb'
 import { fetchAllShowRatings, upsertShowRating, deleteShowRating } from '../lib/showRatings'
+import {
+  fetchAllSeasonRatingsForShow,
+  upsertSeasonRating,
+  deleteSeasonRating,
+} from '../lib/seasonRatings'
 import { bulkMarkWatched, fetchWatchedForShow, markWatched, unmarkWatched, watchedKey } from '../lib/watched'
 import { clearStreamingOverride, fetchStreamingOverride, setStreamingOverride } from '../lib/streamingOverrides'
 import { pickBestFreeProvider } from '../lib/streamingProvider'
 import { useAuth } from '../contexts/AuthContext'
 import type {
+  SeasonRatingWithUser,
   ShowRatingWithUser,
   StreamingOverride,
   TmdbProviderListItem,
@@ -42,16 +48,17 @@ export default function ShowDetail() {
   const [activeSeason, setActiveSeason] = useState<number | null>(null)
   const [watched, setWatched] = useState<WatchedMap>({})
   const [showRatings, setShowRatings] = useState<ShowRatingWithUser[]>([])
+  const [seasonRatings, setSeasonRatings] = useState<SeasonRatingWithUser[]>([])
   const [loadingShow, setLoadingShow] = useState(true)
   const [loadingSeason, setLoadingSeason] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [savingRating, setSavingRating] = useState(false)
-  const [showRatersList, setShowRatersList] = useState(false)
+  const [savingSeasonRating, setSavingSeasonRating] = useState(false)
   const [providers, setProviders] = useState<TmdbWatchProviders | null>(null)
   const [override, setOverride] = useState<StreamingOverride | null>(null)
   const [pickerOpen, setPickerOpen] = useState(false)
 
-  // Load show detail + my watch progress + everyone's show rating, in parallel.
+  // Load show detail + my watch progress + everyone's show/season ratings, in parallel.
   useEffect(() => {
     let cancelled = false
     setLoadingShow(true)
@@ -59,15 +66,17 @@ export default function ShowDetail() {
 
     async function load() {
       try {
-        const [showData, watchedMap, ratings] = await Promise.all([
+        const [showData, watchedMap, ratings, seasonRatingRows] = await Promise.all([
           getShowDetail(showId),
           user ? fetchWatchedForShow(user.id, showId) : Promise.resolve({}),
           fetchAllShowRatings(showId),
+          fetchAllSeasonRatingsForShow(showId),
         ])
         if (cancelled) return
         setShow(showData)
         setWatched(watchedMap)
         setShowRatings(ratings)
+        setSeasonRatings(seasonRatingRows)
         const firstRealSeason = showData.seasons.find((s) => s.season_number > 0) ?? showData.seasons[0]
         setActiveSeason(firstRealSeason ? firstRealSeason.season_number : null)
       } catch (err) {
@@ -151,12 +160,15 @@ export default function ShowDetail() {
     () => showRatings.find((r) => r.user_id === user?.id) ?? null,
     [showRatings, user],
   )
-  const others = useMemo(
-    () => showRatings.filter((r) => r.user_id !== user?.id),
-    [showRatings, user],
+
+  const seasonRatingsForActive = useMemo(
+    () => (activeSeason === null ? [] : seasonRatings.filter((r) => r.season_number === activeSeason)),
+    [seasonRatings, activeSeason],
   )
-  const othersAvg =
-    others.length > 0 ? others.reduce((sum, r) => sum + r.rating, 0) / others.length : null
+  const mySeasonRating = useMemo(
+    () => seasonRatingsForActive.find((r) => r.user_id === user?.id) ?? null,
+    [seasonRatingsForActive, user],
+  )
 
   async function handleToggleWatched(episodeNumber: number, episodeName: string) {
     if (!user || !show || activeSeason === null) return
@@ -334,6 +346,40 @@ export default function ShowDetail() {
     }
   }
 
+  /** Same shape as handleRateShow, but scoped to whichever season tab is
+   * active -- a separate, independent rating rather than a component of
+   * the show-level one. */
+  async function handleRateSeason(value: number) {
+    if (!user || !show || activeSeason === null) return
+    setSavingSeasonRating(true)
+    try {
+      if (value === 0) {
+        setSeasonRatings((prev) =>
+          prev.filter((r) => !(r.user_id === user.id && r.season_number === activeSeason)),
+        )
+        await deleteSeasonRating(user.id, show.id, activeSeason)
+        return
+      }
+      const saved = await upsertSeasonRating({
+        userId: user.id,
+        showId: show.id,
+        showName: show.name,
+        showPosterPath: show.poster_path,
+        seasonNumber: activeSeason,
+        seasonName: season?.season_number === activeSeason ? season.name : null,
+        rating: value,
+      })
+      setSeasonRatings((prev) => [
+        ...prev.filter((r) => !(r.user_id === user.id && r.season_number === activeSeason)),
+        { ...saved, users: { username: user.username } },
+      ])
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to save season rating.')
+    } finally {
+      setSavingSeasonRating(false)
+    }
+  }
+
   if (Number.isNaN(showId)) {
     return <p className="p-8 text-center text-sm text-danger">Invalid show.</p>
   }
@@ -406,61 +452,14 @@ export default function ShowDetail() {
         {/* Your rating + the crowd's */}
         {show && !loadingShow && (
           <div className="mt-5">
-            <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
-              <StarRating value={myShowRating?.rating ?? 0} onChange={handleRateShow} size="lg" />
-              {savingRating && (
-                <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-base-600 border-t-accent-400" />
-              )}
-              {showRatings.length > 0 && (
-                <button
-                  type="button"
-                  onClick={() => setShowRatersList((v) => !v)}
-                  className="flex items-center gap-1 text-xs text-base-400 hover:text-base-200"
-                >
-                  {othersAvg !== null ? (
-                    <>
-                      <StarGlyph />
-                      {othersAvg.toFixed(1)}
-                      <span className="text-base-500">
-                        ({others.length} {others.length === 1 ? 'other rating' : 'other ratings'})
-                      </span>
-                    </>
-                  ) : (
-                    <span className="text-base-500">You&apos;re the first to rate this</span>
-                  )}
-                </button>
-              )}
-            </div>
-
-            {showRatersList && showRatings.length > 0 && (
-              <motion.ul
-                initial={{ opacity: 0, y: -4 }}
-                animate={{ opacity: 1, y: 0 }}
-                className="mt-2.5 max-w-xs space-y-1.5 border-t border-hairline pt-2.5"
-              >
-                {showRatings
-                  .slice()
-                  .sort((a, b) => b.rating - a.rating)
-                  .map((r) => (
-                    <li key={r.id} className="flex items-center justify-between text-xs">
-                      {r.user_id === user?.id ? (
-                        <span className="text-base-300">You</span>
-                      ) : (
-                        <Link
-                          to={`/u/${r.users?.username ?? ''}`}
-                          className="text-base-300 hover:text-accent-400"
-                        >
-                          @{r.users?.username ?? 'unknown'}
-                        </Link>
-                      )}
-                      <span className="flex items-center gap-1 text-star">
-                        {r.rating.toFixed(1)}
-                        <StarGlyph />
-                      </span>
-                    </li>
-                  ))}
-              </motion.ul>
-            )}
+            <RatingSummary
+              ratings={showRatings}
+              myRating={myShowRating?.rating ?? 0}
+              onChange={handleRateShow}
+              saving={savingRating}
+              currentUserId={user?.id}
+              size="lg"
+            />
           </div>
         )}
 
@@ -598,6 +597,21 @@ export default function ShowDetail() {
               )}
             </div>
 
+            {/* Season rating -- independent of the show-level one above, the
+                way IMDb/Rotten Tomatoes show a season score next to a show's
+                overall one, not averaged into or out of it. */}
+            <div className="mb-5">
+              <RatingSummary
+                ratings={seasonRatingsForActive}
+                myRating={mySeasonRating?.rating ?? 0}
+                onChange={handleRateSeason}
+                saving={savingSeasonRating}
+                currentUserId={user?.id}
+                size="md"
+                emptyLabel="You're the first to rate this season"
+              />
+            </div>
+
             <div className="space-y-3">
               {loadingSeason
                 ? Array.from({ length: 4 }).map((_, i) => <EpisodeRowSkeleton key={i} />)
@@ -621,14 +635,6 @@ export default function ShowDetail() {
         )}
       </div>
     </div>
-  )
-}
-
-function StarGlyph() {
-  return (
-    <svg width="14" height="14" viewBox="0 0 24 24" fill="var(--color-star)">
-      <path d="M12 2.5l2.9 6.15 6.6.72-4.95 4.6 1.3 6.53L12 17.3l-5.85 3.2 1.3-6.53-4.95-4.6 6.6-.72L12 2.5z" />
-    </svg>
   )
 }
 
