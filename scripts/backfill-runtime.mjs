@@ -1,11 +1,18 @@
+#!/usr/bin/env node
 // One-off backfill for episode_watched.runtime_minutes on rows logged
 // before that column existed, so "Hours watched" on Profile is accurate
 // for older history instead of showing 0 until new episodes get marked.
 //
 // NOT run automatically by anything -- this repo's build/CI never touches
-// it. Run it yourself, once, whenever you're ready:
+// it. Run it yourself, once, whenever you're ready. Either:
 //
 //   node --env-file=.env.local scripts/backfill-runtime.mjs
+//
+// or, since this file has a shebang, make it executable once and run it
+// directly (still needs the env vars, e.g. via `set -a; source .env.local; set +a` first):
+//
+//   chmod +x scripts/backfill-runtime.mjs
+//   ./scripts/backfill-runtime.mjs
 //
 // (or export VITE_SUPABASE_URL / VITE_SUPABASE_ANON_KEY / VITE_TMDB_API_KEY
 // yourself first -- same variable names as .env.local.)
