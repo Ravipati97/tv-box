@@ -36,11 +36,14 @@ import {
 import { clearStreamingOverride, fetchStreamingOverride, setStreamingOverride } from '../lib/streamingOverrides'
 import { invalidatePlatformCache, pickBestFreeProvider } from '../lib/streamingProvider'
 import { addToWatchlist, fetchWatchlistItem, removeFromWatchlist } from '../lib/watchlist'
+import { deleteRewatch, fetchRewatchesForShow, logRewatch } from '../lib/rewatches'
+import { formatShortDate } from '../lib/date'
 import { useAuth } from '../contexts/AuthContext'
 import type {
   EpisodeWatched,
   SeasonRatingWithUser,
   ShowRatingWithUser,
+  ShowRewatch,
   StreamingOverride,
   TmdbProviderListItem,
   TmdbSeasonDetail,
@@ -83,6 +86,8 @@ export default function ShowDetail() {
   const [bulkUndo, setBulkUndo] = useState<BulkMarkUndo | null>(null)
   const [watchlistItem, setWatchlistItem] = useState<WatchlistItem | null>(null)
   const [savingWatchlist, setSavingWatchlist] = useState(false)
+  const [rewatches, setRewatches] = useState<ShowRewatch[]>([])
+  const [loggingRewatch, setLoggingRewatch] = useState(false)
 
   // Load show detail + my watch progress + everyone's show/season ratings, in parallel.
   useEffect(() => {
@@ -92,12 +97,13 @@ export default function ShowDetail() {
 
     async function load() {
       try {
-        const [showData, watchedMap, ratings, seasonRatingRows, watchlistRow] = await Promise.all([
+        const [showData, watchedMap, ratings, seasonRatingRows, watchlistRow, rewatchRows] = await Promise.all([
           getShowDetail(showId),
           user ? fetchWatchedForShow(user.id, showId) : Promise.resolve({}),
           fetchAllShowRatings(showId),
           fetchAllSeasonRatingsForShow(showId),
           user ? fetchWatchlistItem(user.id, showId) : Promise.resolve(null),
+          user ? fetchRewatchesForShow(user.id, showId) : Promise.resolve([]),
         ])
         if (cancelled) return
         setShow(showData)
@@ -105,6 +111,7 @@ export default function ShowDetail() {
         setShowRatings(ratings)
         setSeasonRatings(seasonRatingRows)
         setWatchlistItem(watchlistRow)
+        setRewatches(rewatchRows)
         const firstRealSeason = showData.seasons.find((s) => s.season_number > 0) ?? showData.seasons[0]
         setActiveSeason(firstRealSeason ? firstRealSeason.season_number : null)
       } catch (err) {
@@ -423,6 +430,30 @@ export default function ShowDetail() {
     }
   }
 
+  /** Logs a rewatch -- a separate, append-only event, not a change to
+   * episode_watched (which stays exactly what it's always meant: first-time
+   * progress toward "finished"). Only ever offered once a show is finished. */
+  async function handleLogRewatch() {
+    if (!user || !show) return
+    setLoggingRewatch(true)
+    try {
+      const saved = await logRewatch({
+        userId: user.id,
+        showId: show.id,
+        showName: show.name,
+        showPosterPath: show.poster_path,
+      })
+      setRewatches((prev) => [saved, ...prev])
+    } finally {
+      setLoggingRewatch(false)
+    }
+  }
+
+  async function handleDeleteRewatch(id: string) {
+    setRewatches((prev) => prev.filter((r) => r.id !== id))
+    await deleteRewatch(id)
+  }
+
   async function handlePickProvider(p: TmdbProviderListItem) {
     if (!user || !show) return
     const saved = await setStreamingOverride({
@@ -648,6 +679,45 @@ export default function ShowDetail() {
                       : undefined
                   }
                 />
+              </div>
+            )}
+
+            {/* Rewatches -- a separate append-only log, only offered once
+                the show is actually finished. */}
+            {watchedCount >= totalEpisodes && (
+              <div className="mt-2">
+                <button
+                  type="button"
+                  onClick={handleLogRewatch}
+                  disabled={loggingRewatch}
+                  className="text-xs text-accent-400 hover:underline disabled:opacity-60"
+                >
+                  {loggingRewatch
+                    ? 'Logging…'
+                    : rewatches.length > 0
+                      ? `Log another rewatch (${rewatches.length} so far)`
+                      : 'Log a rewatch'}
+                </button>
+                {rewatches.length > 0 && (
+                  <ul className="mt-1.5 flex flex-wrap gap-1.5">
+                    {rewatches.map((r) => (
+                      <li
+                        key={r.id}
+                        className="inline-flex items-center gap-1 rounded-full bg-hover-strong px-2 py-0.5 text-[11px] text-base-400"
+                      >
+                        {formatShortDate(r.rewatched_at)}
+                        <button
+                          type="button"
+                          onClick={() => handleDeleteRewatch(r.id)}
+                          className="text-base-500 hover:text-danger"
+                          aria-label="Remove this rewatch"
+                        >
+                          ×
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                )}
               </div>
             )}
           </div>

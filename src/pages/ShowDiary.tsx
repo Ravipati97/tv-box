@@ -4,10 +4,11 @@ import { motion } from 'framer-motion'
 import { useAuth } from '../contexts/AuthContext'
 import { fetchShowRating } from '../lib/showRatings'
 import { fetchWatchedForUserAndShow } from '../lib/watched'
+import { fetchRewatchesForShow } from '../lib/rewatches'
 import { fetchUserByUsername } from '../lib/users'
 import { posterUrl } from '../lib/tmdb'
 import { formatShortDate } from '../lib/date'
-import type { AppUser, EpisodeWatched, ShowRating } from '../types'
+import type { AppUser, EpisodeWatched, ShowRating, ShowRewatch } from '../types'
 
 export default function ShowDiary() {
   const { username, showId } = useParams<{ username: string; showId: string }>()
@@ -17,6 +18,7 @@ export default function ShowDiary() {
   const [profile, setProfile] = useState<AppUser | null | undefined>(undefined)
   const [rating, setRating] = useState<ShowRating | null>(null)
   const [watched, setWatched] = useState<EpisodeWatched[]>([])
+  const [rewatches, setRewatches] = useState<ShowRewatch[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
@@ -31,13 +33,15 @@ export default function ShowDiary() {
         if (cancelled) return
         setProfile(found)
         if (found) {
-          const [ratingRow, watchedRows] = await Promise.all([
+          const [ratingRow, watchedRows, rewatchRows] = await Promise.all([
             fetchShowRating(found.id, showIdNum),
             fetchWatchedForUserAndShow(found.id, showIdNum),
+            fetchRewatchesForShow(found.id, showIdNum),
           ])
           if (!cancelled) {
             setRating(ratingRow)
             setWatched(watchedRows)
+            setRewatches(rewatchRows)
           }
         }
       })
@@ -125,6 +129,11 @@ export default function ShowDiary() {
                     · {watched.length} {watched.length === 1 ? 'episode' : 'episodes'} watched
                   </span>
                 )}
+                {rewatches.length > 0 && (
+                  <span>
+                    · rewatched {rewatches.length} {rewatches.length === 1 ? 'time' : 'times'}
+                  </span>
+                )}
               </p>
               <Link
                 to={`/show/${showIdNum}`}
@@ -134,6 +143,22 @@ export default function ShowDiary() {
               </Link>
             </div>
           </div>
+
+          {rewatches.length > 0 && (
+            <div className="mb-6">
+              <h2 className="mb-2 text-sm font-semibold uppercase tracking-wide text-base-400">Rewatches</h2>
+              <ul className="flex flex-wrap gap-1.5">
+                {rewatches.map((r) => (
+                  <li
+                    key={r.id}
+                    className="rounded-full bg-hover-strong px-2.5 py-1 text-xs text-base-300"
+                  >
+                    {formatShortDate(r.rewatched_at)}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
 
           {watched.length > 0 && (
             <>
