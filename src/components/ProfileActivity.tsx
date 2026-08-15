@@ -5,10 +5,12 @@ import { motion } from 'framer-motion'
 import { fetchRecentShowRatings } from '../lib/showRatings'
 import { fetchRecentWatched } from '../lib/watched'
 import { summarizeShowActivity, watchHistory } from '../lib/showActivity'
+import { fetchWatchlist, removeFromWatchlist } from '../lib/watchlist'
 import { posterUrl } from '../lib/tmdb'
-import { dayKey, formatDiaryHeading } from '../lib/date'
+import { dayKey, formatDiaryHeading, formatShortDate } from '../lib/date'
+import { useAuth } from '../contexts/AuthContext'
 import HistorySection from './HistorySection'
-import type { EpisodeWatched, ShowRating } from '../types'
+import type { EpisodeWatched, ShowRating, WatchlistItem } from '../types'
 
 interface ProfileActivityProps {
   userId: string
@@ -20,12 +22,15 @@ interface DiaryGroup {
   items: ShowRating[]
 }
 
-type Tab = 'diary' | 'history'
+type Tab = 'diary' | 'history' | 'watchlist'
 
 export default function ProfileActivity({ userId, username }: ProfileActivityProps) {
+  const { user: me } = useAuth()
+  const isMe = me?.id === userId
   const [tab, setTab] = useState<Tab>('diary')
   const [ratings, setRatings] = useState<ShowRating[]>([])
   const [watched, setWatched] = useState<EpisodeWatched[]>([])
+  const [watchlist, setWatchlist] = useState<WatchlistItem[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
@@ -33,11 +38,16 @@ export default function ProfileActivity({ userId, username }: ProfileActivityPro
     let cancelled = false
     setLoading(true)
     setError(null)
-    Promise.all([fetchRecentShowRatings(userId, 2000), fetchRecentWatched(userId, 2000)])
-      .then(([ratingRows, watchedRows]) => {
+    Promise.all([
+      fetchRecentShowRatings(userId, 2000),
+      fetchRecentWatched(userId, 2000),
+      fetchWatchlist(userId),
+    ])
+      .then(([ratingRows, watchedRows, watchlistRows]) => {
         if (!cancelled) {
           setRatings(ratingRows)
           setWatched(watchedRows)
+          setWatchlist(watchlistRows)
         }
       })
       .catch((err) => {
@@ -50,6 +60,11 @@ export default function ProfileActivity({ userId, username }: ProfileActivityPro
       cancelled = true
     }
   }, [userId])
+
+  async function handleRemoveFromWatchlist(showId: number) {
+    setWatchlist((prev) => prev.filter((w) => w.show_id !== showId))
+    await removeFromWatchlist(userId, showId)
+  }
 
   const activity = useMemo(() => summarizeShowActivity(ratings, watched), [ratings, watched])
 
@@ -94,6 +109,9 @@ export default function ProfileActivity({ userId, username }: ProfileActivityPro
         </TabButton>
         <TabButton active={tab === 'history'} onClick={() => setTab('history')}>
           History
+        </TabButton>
+        <TabButton active={tab === 'watchlist'} onClick={() => setTab('watchlist')}>
+          Watchlist
         </TabButton>
       </div>
 
@@ -163,12 +181,66 @@ export default function ProfileActivity({ userId, username }: ProfileActivityPro
             ))}
           </div>
         )
-      ) : (
+      ) : tab === 'history' ? (
         <HistorySection
           activity={history}
           username={username}
           emptyMessage="Nothing finished yet. Shows show up here once every episode is watched, or once they're rated."
         />
+      ) : watchlist.length === 0 ? (
+        <div className="mt-10 flex flex-col items-center text-center">
+          <div className="mb-3 text-4xl">🔖</div>
+          <p className="text-sm text-base-500">
+            {isMe ? "Nothing on your watchlist yet. " : 'Nothing here yet. '}
+            {isMe && (
+              <>
+                <Link to="/search" className="text-accent-400 hover:underline">
+                  Find a show
+                </Link>{' '}
+                to save one for later.
+              </>
+            )}
+          </p>
+        </div>
+      ) : (
+        <ul className="space-y-2">
+          {watchlist.map((w, i) => (
+            <motion.li
+              key={w.id}
+              initial={{ opacity: 0, y: 6 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.25, delay: Math.min(i, 8) * 0.02 }}
+              className="flex items-center gap-3 rounded-xl border border-hairline bg-base-850/60 p-2.5"
+            >
+              <Link to={`/show/${w.show_id}`} className="flex min-w-0 flex-1 items-center gap-3">
+                <div className="h-14 w-10 shrink-0 overflow-hidden rounded-md bg-base-800">
+                  {w.show_poster_path && (
+                    <img
+                      src={posterUrl(w.show_poster_path, 'w185') ?? undefined}
+                      alt=""
+                      loading="lazy"
+                      decoding="async"
+                      className="h-full w-full object-cover"
+                    />
+                  )}
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-sm font-medium text-base-100">{w.show_name}</p>
+                  <p className="text-xs text-base-400">Added {formatShortDate(w.added_at)}</p>
+                </div>
+              </Link>
+              {isMe && (
+                <button
+                  type="button"
+                  onClick={() => handleRemoveFromWatchlist(w.show_id)}
+                  className="shrink-0 text-xs text-base-500 hover:text-danger"
+                >
+                  Remove
+                </button>
+              )}
+            </motion.li>
+          ))}
+        </ul>
       )}
     </div>
   )

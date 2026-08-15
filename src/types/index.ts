@@ -156,6 +156,10 @@ export interface EpisodeWatched {
   watched_at: string
   /** True when the actual date wasn't known and watched_at is just a placeholder. */
   watched_at_unknown: boolean
+  /** Snapshot of the episode's runtime (minutes) as of this watch, for the
+   * "hours watched" stat. Null for rows logged before this column existed,
+   * or when TMDB doesn't have a runtime for the episode. */
+  runtime_minutes: number | null
 }
 
 /** Keyed lookup: "season-episode" -> watched row, for one user's progress on one show. */
@@ -164,4 +168,53 @@ export type WatchedMap = Record<string, EpisodeWatched>
 /** An episode_watched row joined with the watcher's username (group activity view). */
 export interface EpisodeWatchedWithUser extends EpisodeWatched {
   users: { username: string } | null
+}
+
+/** A show someone wants to watch but hasn't started -- see EpisodeWatched
+ * for actual progress once they do. */
+export interface WatchlistItem {
+  id: string
+  user_id: string
+  show_id: number
+  show_name: string
+  show_poster_path: string | null
+  added_at: string
+}
+
+/** One "I rewatched this" log entry -- independent of EpisodeWatched (which
+ * only tracks first-time progress toward "finished"). Append-only: logging
+ * a rewatch never edits or replaces an earlier one. */
+export interface ShowRewatch {
+  id: string
+  user_id: string
+  show_id: number
+  show_name: string
+  show_poster_path: string | null
+  rewatched_at: string
+}
+
+/** A user-curated list of shows (e.g. "Comfort shows"). Readable by anyone,
+ * like everything else in this app -- "shareable" just means a clean URL. */
+export interface ShowList {
+  id: string
+  user_id: string
+  name: string
+  description: string | null
+  created_at: string
+  updated_at: string
+}
+
+/** One show inside a list. */
+export interface ShowListItem {
+  id: string
+  list_id: string
+  show_id: number
+  show_name: string
+  show_poster_path: string | null
+  added_at: string
+}
+
+/** A show_lists row plus how many shows are on it, for the "My Lists" overview. */
+export interface ShowListWithCount extends ShowList {
+  itemCount: number
 }

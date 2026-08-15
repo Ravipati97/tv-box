@@ -272,3 +272,157 @@ drop policy if exists "Anyone can delete streaming overrides" on public.show_str
 create policy "Anyone can delete streaming overrides"
   on public.show_streaming_overrides for delete
   using (true);
+
+-- "Want to watch" -- shows saved before starting, independent of
+-- episode_watched (which only tracks progress on shows you've actually
+-- started). No update policy: you either have a show on your watchlist or
+-- you don't, there's nothing on a row to edit.
+create table if not exists public.watchlist (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references public.users(id) on delete cascade,
+
+  show_id integer not null,
+  show_name text not null,
+  show_poster_path text,
+
+  added_at timestamptz not null default now(),
+
+  unique (user_id, show_id)
+);
+
+create index if not exists watchlist_user_id_idx on public.watchlist (user_id);
+create index if not exists watchlist_added_at_idx on public.watchlist (user_id, added_at desc);
+
+alter table public.watchlist enable row level security;
+
+drop policy if exists "Anyone can read watchlist" on public.watchlist;
+create policy "Anyone can read watchlist"
+  on public.watchlist for select
+  using (true);
+
+drop policy if exists "Anyone can insert watchlist" on public.watchlist;
+create policy "Anyone can insert watchlist"
+  on public.watchlist for insert
+  with check (true);
+
+drop policy if exists "Anyone can delete watchlist" on public.watchlist;
+create policy "Anyone can delete watchlist"
+  on public.watchlist for delete
+  using (true);
+
+-- A simple, append-only log of "I rewatched this show" events -- separate
+-- from episode_watched (which tracks first-watch progress: "N/M watched",
+-- Now Watching, Finished) so logging a rewatch never touches or
+-- reinterprets that progress math. Unlike every other per-user-per-show
+-- table here, there's deliberately no unique constraint -- you can log this
+-- as many times as you actually rewatch the show.
+create table if not exists public.show_rewatches (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references public.users(id) on delete cascade,
+
+  show_id integer not null,
+  show_name text not null,
+  show_poster_path text,
+
+  rewatched_at timestamptz not null default now()
+);
+
+create index if not exists show_rewatches_user_id_idx on public.show_rewatches (user_id);
+create index if not exists show_rewatches_user_show_idx on public.show_rewatches (user_id, show_id);
+
+alter table public.show_rewatches enable row level security;
+
+drop policy if exists "Anyone can read rewatches" on public.show_rewatches;
+create policy "Anyone can read rewatches"
+  on public.show_rewatches for select
+  using (true);
+
+drop policy if exists "Anyone can insert rewatches" on public.show_rewatches;
+create policy "Anyone can insert rewatches"
+  on public.show_rewatches for insert
+  with check (true);
+
+drop policy if exists "Anyone can delete rewatches" on public.show_rewatches;
+create policy "Anyone can delete rewatches"
+  on public.show_rewatches for delete
+  using (true);
+
+-- Total watch-time: runtime (minutes) as of when each episode was marked
+-- watched, denormalized from TMDB the same way show_total_episodes already
+-- is, so "hours watched" never needs a fresh TMDB call to compute. Rows
+-- logged before this column existed have runtime_minutes = null (they
+-- contribute 0 until backfilled -- see scripts/backfill-runtime.mjs).
+alter table public.episode_watched
+  add column if not exists runtime_minutes integer;
+
+-- User-curated lists of shows (e.g. "Comfort shows"). "Shareable" is close
+-- to free here since every table in this app is already fully readable by
+-- anyone (no real per-user privacy) -- a list just needs a clean URL, not a
+-- separate sharing mechanism.
+create table if not exists public.show_lists (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references public.users(id) on delete cascade,
+
+  name text not null,
+  description text,
+
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+create index if not exists show_lists_user_id_idx on public.show_lists (user_id);
+
+alter table public.show_lists enable row level security;
+
+drop policy if exists "Anyone can read lists" on public.show_lists;
+create policy "Anyone can read lists"
+  on public.show_lists for select
+  using (true);
+
+drop policy if exists "Anyone can insert lists" on public.show_lists;
+create policy "Anyone can insert lists"
+  on public.show_lists for insert
+  with check (true);
+
+drop policy if exists "Anyone can update lists" on public.show_lists;
+create policy "Anyone can update lists"
+  on public.show_lists for update
+  using (true)
+  with check (true);
+
+drop policy if exists "Anyone can delete lists" on public.show_lists;
+create policy "Anyone can delete lists"
+  on public.show_lists for delete
+  using (true);
+
+create table if not exists public.show_list_items (
+  id uuid primary key default gen_random_uuid(),
+  list_id uuid not null references public.show_lists(id) on delete cascade,
+
+  show_id integer not null,
+  show_name text not null,
+  show_poster_path text,
+
+  added_at timestamptz not null default now(),
+
+  unique (list_id, show_id)
+);
+
+create index if not exists show_list_items_list_id_idx on public.show_list_items (list_id);
+
+alter table public.show_list_items enable row level security;
+
+drop policy if exists "Anyone can read list items" on public.show_list_items;
+create policy "Anyone can read list items"
+  on public.show_list_items for select
+  using (true);
+
+drop policy if exists "Anyone can insert list items" on public.show_list_items;
+create policy "Anyone can insert list items"
+  on public.show_list_items for insert
+  with check (true);
+
+drop policy if exists "Anyone can delete list items" on public.show_list_items;
+create policy "Anyone can delete list items"
+  on public.show_list_items for delete
+  using (true);

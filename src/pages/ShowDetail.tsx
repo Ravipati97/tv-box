@@ -35,6 +35,7 @@ import {
 } from '../lib/watched'
 import { clearStreamingOverride, fetchStreamingOverride, setStreamingOverride } from '../lib/streamingOverrides'
 import { invalidatePlatformCache, pickBestFreeProvider } from '../lib/streamingProvider'
+import { addToWatchlist, fetchWatchlistItem, removeFromWatchlist } from '../lib/watchlist'
 import { useAuth } from '../contexts/AuthContext'
 import type {
   EpisodeWatched,
@@ -46,6 +47,7 @@ import type {
   TmdbShowDetail,
   TmdbWatchProviders,
   WatchedMap,
+  WatchlistItem,
 } from '../types'
 
 /** What a bulk mark-watched action changed, so it can be undone -- see
@@ -79,6 +81,8 @@ export default function ShowDetail() {
   const [pickerOpen, setPickerOpen] = useState(false)
   const [startingWatch, setStartingWatch] = useState(false)
   const [bulkUndo, setBulkUndo] = useState<BulkMarkUndo | null>(null)
+  const [watchlistItem, setWatchlistItem] = useState<WatchlistItem | null>(null)
+  const [savingWatchlist, setSavingWatchlist] = useState(false)
 
   // Load show detail + my watch progress + everyone's show/season ratings, in parallel.
   useEffect(() => {
@@ -88,17 +92,19 @@ export default function ShowDetail() {
 
     async function load() {
       try {
-        const [showData, watchedMap, ratings, seasonRatingRows] = await Promise.all([
+        const [showData, watchedMap, ratings, seasonRatingRows, watchlistRow] = await Promise.all([
           getShowDetail(showId),
           user ? fetchWatchedForShow(user.id, showId) : Promise.resolve({}),
           fetchAllShowRatings(showId),
           fetchAllSeasonRatingsForShow(showId),
+          user ? fetchWatchlistItem(user.id, showId) : Promise.resolve(null),
         ])
         if (cancelled) return
         setShow(showData)
         setWatched(watchedMap)
         setShowRatings(ratings)
         setSeasonRatings(seasonRatingRows)
+        setWatchlistItem(watchlistRow)
         const firstRealSeason = showData.seasons.find((s) => s.season_number > 0) ?? showData.seasons[0]
         setActiveSeason(firstRealSeason ? firstRealSeason.season_number : null)
       } catch (err) {
@@ -393,6 +399,30 @@ export default function ShowDetail() {
     })
   }
 
+  /** Toggle for "want to watch", independent of watch progress -- you can
+   * add or remove a show from your watchlist regardless of whether you've
+   * started it, rather than this being auto-managed. */
+  async function handleToggleWatchlist() {
+    if (!user || !show) return
+    setSavingWatchlist(true)
+    try {
+      if (watchlistItem) {
+        setWatchlistItem(null)
+        await removeFromWatchlist(user.id, show.id)
+      } else {
+        const saved = await addToWatchlist({
+          userId: user.id,
+          showId: show.id,
+          showName: show.name,
+          showPosterPath: show.poster_path,
+        })
+        setWatchlistItem(saved)
+      }
+    } finally {
+      setSavingWatchlist(false)
+    }
+  }
+
   async function handlePickProvider(p: TmdbProviderListItem) {
     if (!user || !show) return
     const saved = await setStreamingOverride({
@@ -557,6 +587,26 @@ export default function ShowDetail() {
               currentUserId={user?.id}
               size="lg"
             />
+          </div>
+        )}
+
+        {/* Quick actions: watchlist toggle -- independent of watch progress,
+            so it's available whether or not you've started the show. */}
+        {show && !loadingShow && (
+          <div className="mt-3 flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              onClick={handleToggleWatchlist}
+              disabled={savingWatchlist}
+              className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-medium transition-colors duration-200 disabled:opacity-60 ${
+                watchlistItem
+                  ? 'border-accent-500/40 bg-accent-500/15 text-accent-300'
+                  : 'border-hairline-strong text-base-400 hover:border-accent-500/40 hover:text-base-200'
+              }`}
+            >
+              <BookmarkGlyph filled={Boolean(watchlistItem)} />
+              {watchlistItem ? 'On your watchlist' : 'Add to watchlist'}
+            </button>
           </div>
         )}
 
@@ -760,6 +810,20 @@ export default function ShowDetail() {
         />
       )}
     </div>
+  )
+}
+
+function BookmarkGlyph({ filled }: { filled: boolean }) {
+  return (
+    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" className="shrink-0">
+      <path
+        d="M6 3.5h12a1 1 0 0 1 1 1V21l-7-4.2L5 21V4.5a1 1 0 0 1 1-1Z"
+        fill={filled ? 'var(--color-accent-400)' : 'none'}
+        stroke={filled ? 'var(--color-accent-400)' : 'currentColor'}
+        strokeWidth="1.6"
+        strokeLinejoin="round"
+      />
+    </svg>
   )
 }
 
