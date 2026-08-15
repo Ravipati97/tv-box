@@ -20,8 +20,12 @@
 // Safe to re-run: it only touches rows where runtime_minutes is still
 // null, and leaves a row null (rather than guessing) if TMDB doesn't have
 // a runtime for that episode.
-
-import { createClient } from '@supabase/supabase-js'
+//
+// Talks to Supabase's REST API (PostgREST) directly via fetch, rather than
+// the @supabase/supabase-js client -- that client also spins up a realtime
+// websocket client on construction, which this script never needs but
+// which throws on Node < 22 (no native WebSocket). Plain fetch avoids that
+// entirely and needs nothing beyond what Node already ships.
 
 const SUPABASE_URL = process.env.VITE_SUPABASE_URL
 const SUPABASE_ANON_KEY = process.env.VITE_SUPABASE_ANON_KEY
@@ -33,7 +37,29 @@ if (!SUPABASE_URL || !SUPABASE_ANON_KEY || !TMDB_API_KEY) {
   process.exit(1)
 }
 
-const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY)
+const REST_URL = `${SUPABASE_URL.replace(/\/$/, '')}/rest/v1`
+const SUPABASE_HEADERS = {
+  apikey: SUPABASE_ANON_KEY,
+  Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+  'Content-Type': 'application/json',
+}
+
+async function fetchRowsMissingRuntime() {
+  const url = `${REST_URL}/episode_watched?select=id,show_id,season_number,episode_number&runtime_minutes=is.null`
+  const res = await fetch(url, { headers: SUPABASE_HEADERS })
+  if (!res.ok) throw new Error(`Supabase select failed (${res.status}): ${await res.text()}`)
+  return res.json()
+}
+
+async function updateRuntime(id, runtimeMinutes) {
+  const url = `${REST_URL}/episode_watched?id=eq.${id}`
+  const res = await fetch(url, {
+    method: 'PATCH',
+    headers: { ...SUPABASE_HEADERS, Prefer: 'return=minimal' },
+    body: JSON.stringify({ runtime_minutes: runtimeMinutes }),
+  })
+  if (!res.ok) throw new Error(`Supabase update failed (${res.status}): ${await res.text()}`)
+}
 
 async function tmdbEpisodeRuntimes(showId, seasonNumber) {
   const url = `https://api.themoviedb.org/3/tv/${showId}/season/${seasonNumber}?api_key=${TMDB_API_KEY}&language=en-US`
@@ -48,12 +74,7 @@ async function tmdbEpisodeRuntimes(showId, seasonNumber) {
 }
 
 async function main() {
-  const { data: rows, error } = await supabase
-    .from('episode_watched')
-    .select('id, show_id, season_number, episode_number')
-    .is('runtime_minutes', null)
-
-  if (error) throw error
+  const rows = await fetchRowsMissingRuntime()
   if (!rows || rows.length === 0) {
     console.log('Nothing to backfill -- every row already has a runtime.')
     return
@@ -87,15 +108,12 @@ async function main() {
         skipped++
         continue
       }
-      const { error: updateError } = await supabase
-        .from('episode_watched')
-        .update({ runtime_minutes: runtime })
-        .eq('id', row.id)
-      if (updateError) {
-        console.warn(`Failed to update row ${row.id}: ${updateError.message}`)
-        skipped++
-      } else {
+      try {
+        await updateRuntime(row.id, runtime)
         updated++
+      } catch (err) {
+        console.warn(`Failed to update row ${row.id}: ${err.message}`)
+        skipped++
       }
     }
   }
