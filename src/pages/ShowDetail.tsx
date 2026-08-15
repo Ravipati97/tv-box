@@ -5,6 +5,7 @@ import SeasonTabs from '../components/SeasonTabs'
 import EpisodeRow from '../components/EpisodeRow'
 import RatingSummary from '../components/RatingSummary'
 import DateMarkControl from '../components/DateMarkControl'
+import UndoToast from '../components/UndoToast'
 import { EpisodeRowSkeleton } from '../components/Skeletons'
 import {
   backdropUrl,
@@ -23,11 +24,20 @@ import {
   upsertSeasonRating,
   deleteSeasonRating,
 } from '../lib/seasonRatings'
-import { bulkMarkWatched, fetchWatchedForShow, markWatched, unmarkWatched, watchedKey } from '../lib/watched'
+import {
+  bulkMarkWatched,
+  bulkUnmarkWatched,
+  fetchWatchedForShow,
+  markWatched,
+  restoreWatched,
+  unmarkWatched,
+  watchedKey,
+} from '../lib/watched'
 import { clearStreamingOverride, fetchStreamingOverride, setStreamingOverride } from '../lib/streamingOverrides'
 import { invalidatePlatformCache, pickBestFreeProvider } from '../lib/streamingProvider'
 import { useAuth } from '../contexts/AuthContext'
 import type {
+  EpisodeWatched,
   SeasonRatingWithUser,
   ShowRatingWithUser,
   StreamingOverride,
@@ -37,6 +47,16 @@ import type {
   TmdbWatchProviders,
   WatchedMap,
 } from '../types'
+
+/** What a bulk mark-watched action changed, so it can be undone -- see
+ * UndoToast below. `previousRows` are episodes that were already watched
+ * (their exact prior state, to restore); `addedKeys` are episodes that
+ * didn't exist before (to delete on undo, not "restore"). */
+interface BulkMarkUndo {
+  message: string
+  previousRows: EpisodeWatched[]
+  addedKeys: { seasonNumber: number; episodeNumber: number }[]
+}
 
 export default function ShowDetail() {
   const { id } = useParams<{ id: string }>()
@@ -58,6 +78,7 @@ export default function ShowDetail() {
   const [override, setOverride] = useState<StreamingOverride | null>(null)
   const [pickerOpen, setPickerOpen] = useState(false)
   const [startingWatch, setStartingWatch] = useState(false)
+  const [bulkUndo, setBulkUndo] = useState<BulkMarkUndo | null>(null)
 
   // Load show detail + my watch progress + everyone's show/season ratings, in parallel.
   useEffect(() => {
@@ -208,6 +229,10 @@ export default function ShowDetail() {
           episodeNumber: i + 1,
         })),
       )
+    // Snapshot what's about to change *before* the write, so a mis-tap here
+    // (this is exactly what silently overwrote real watch dates once) can be
+    // undone instead of requiring a manual, error-prone fix.
+    const { previousRows, addedKeys } = snapshotBulkTargets(episodes)
     const saved = await bulkMarkWatched({
       userId: user.id,
       showId: show.id,
@@ -221,6 +246,52 @@ export default function ShowDetail() {
     setWatched((prev) => {
       const next = { ...prev }
       for (const row of saved) next[watchedKey(row.season_number, row.episode_number)] = row
+      return next
+    })
+    setBulkUndo({
+      message:
+        previousRows.length > 0
+          ? `Marked ${saved.length} episodes watched (${previousRows.length} overwritten)`
+          : `Marked ${saved.length} episodes watched`,
+      previousRows,
+      addedKeys,
+    })
+  }
+
+  /** Splits a batch of (season, episode) targets into ones that already had
+   * a watched row (captured in full, so undo can restore their exact prior
+   * date) and ones that don't exist yet (captured as keys, so undo just
+   * deletes them). Shared by both bulk actions below. */
+  function snapshotBulkTargets(
+    episodes: { seasonNumber: number; episodeNumber: number }[],
+  ): { previousRows: EpisodeWatched[]; addedKeys: { seasonNumber: number; episodeNumber: number }[] } {
+    const previousRows: EpisodeWatched[] = []
+    const addedKeys: { seasonNumber: number; episodeNumber: number }[] = []
+    for (const ep of episodes) {
+      const existing = watched[watchedKey(ep.seasonNumber, ep.episodeNumber)]
+      if (existing) previousRows.push(existing)
+      else addedKeys.push(ep)
+    }
+    return { previousRows, addedKeys }
+  }
+
+  /** Undoes whichever bulk action last ran: restores episodes that were
+   * already watched to their exact prior date, and deletes episodes the
+   * action itself created. */
+  async function handleUndoBulkMark() {
+    if (!bulkUndo || !user || !show) return
+    const snapshot = bulkUndo
+    setBulkUndo(null)
+    const [restored] = await Promise.all([
+      restoreWatched(snapshot.previousRows),
+      snapshot.addedKeys.length > 0
+        ? bulkUnmarkWatched(user.id, show.id, snapshot.addedKeys)
+        : Promise.resolve(),
+    ])
+    setWatched((prev) => {
+      const next = { ...prev }
+      for (const key of snapshot.addedKeys) delete next[watchedKey(key.seasonNumber, key.episodeNumber)]
+      for (const row of restored) next[watchedKey(row.season_number, row.episode_number)] = row
       return next
     })
   }
@@ -296,6 +367,7 @@ export default function ShowDetail() {
         episodeNumber: ep.episode_number,
         episodeName: ep.name,
       }))
+    const { previousRows, addedKeys } = snapshotBulkTargets(episodes)
     const saved = await bulkMarkWatched({
       userId: user.id,
       showId: show.id,
@@ -310,6 +382,14 @@ export default function ShowDetail() {
       const next = { ...prev }
       for (const row of saved) next[watchedKey(row.season_number, row.episode_number)] = row
       return next
+    })
+    setBulkUndo({
+      message:
+        previousRows.length > 0
+          ? `Marked ${saved.length} episodes watched (${previousRows.length} overwritten)`
+          : `Marked ${saved.length} episodes watched`,
+      previousRows,
+      addedKeys,
     })
   }
 
@@ -512,6 +592,11 @@ export default function ShowDetail() {
                 <DateMarkControl
                   label="Seen this before? Mark it all watched"
                   onConfirm={handleMarkAllWatched}
+                  confirmSummary={
+                    watchedCount > 0
+                      ? `This will overwrite the date on ${watchedCount} already-watched episode${watchedCount === 1 ? '' : 's'}.`
+                      : undefined
+                  }
                 />
               </div>
             )}
@@ -615,7 +700,15 @@ export default function ShowDetail() {
                     {seasonWatchedCount}/{season.episodes.length} watched
                   </span>
                   {seasonWatchedCount < season.episodes.length && (
-                    <DateMarkControl label="Mark season watched" onConfirm={handleMarkSeasonWatched} />
+                    <DateMarkControl
+                      label="Mark season watched"
+                      onConfirm={handleMarkSeasonWatched}
+                      confirmSummary={
+                        seasonWatchedCount > 0
+                          ? `This will overwrite the date on ${seasonWatchedCount} already-watched episode${seasonWatchedCount === 1 ? '' : 's'} in this season.`
+                          : undefined
+                      }
+                    />
                   )}
                 </div>
               )}
@@ -658,6 +751,14 @@ export default function ShowDetail() {
           </div>
         )}
       </div>
+
+      {bulkUndo && (
+        <UndoToast
+          message={bulkUndo.message}
+          onUndo={handleUndoBulkMark}
+          onDismiss={() => setBulkUndo(null)}
+        />
+      )}
     </div>
   )
 }

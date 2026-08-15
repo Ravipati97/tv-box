@@ -173,3 +173,60 @@ export async function unmarkWatched(
 
   if (error) throw error
 }
+
+/**
+ * Restores episode_watched rows to an exact prior state -- used only to
+ * undo a bulk action that just overwrote them. Unlike markWatched (always
+ * "now") or bulkMarkWatched (one shared date for the whole batch), this
+ * preserves each row's own original watched_at/watched_at_unknown, since
+ * that's the whole point of an undo.
+ */
+export async function restoreWatched(rows: EpisodeWatched[]): Promise<EpisodeWatched[]> {
+  if (rows.length === 0) return []
+  const payload = rows.map((r) => ({
+    user_id: r.user_id,
+    show_id: r.show_id,
+    show_name: r.show_name,
+    show_poster_path: r.show_poster_path,
+    show_total_episodes: r.show_total_episodes,
+    season_number: r.season_number,
+    episode_number: r.episode_number,
+    episode_name: r.episode_name,
+    watched_at: r.watched_at,
+    watched_at_unknown: r.watched_at_unknown,
+  }))
+  const { data, error } = await supabase
+    .from('episode_watched')
+    .upsert(payload, { onConflict: 'user_id,show_id,season_number,episode_number' })
+    .select()
+
+  if (error) throw error
+  return (data ?? []) as EpisodeWatched[]
+}
+
+/**
+ * Deletes many episode_watched rows in one request -- used to undo a bulk
+ * mark that created brand-new rows (the ones that didn't exist before, so
+ * "undo" means removing them rather than restoring an old value). Supabase
+ * doesn't support an OR-of-tuples filter directly, so this builds one
+ * `and(...)` clause per episode and ORs them together -- fine at the sizes
+ * a single show ever has.
+ */
+export async function bulkUnmarkWatched(
+  userId: string,
+  showId: number,
+  episodes: { seasonNumber: number; episodeNumber: number }[],
+): Promise<void> {
+  if (episodes.length === 0) return
+  const orFilter = episodes
+    .map((e) => `and(season_number.eq.${e.seasonNumber},episode_number.eq.${e.episodeNumber})`)
+    .join(',')
+  const { error } = await supabase
+    .from('episode_watched')
+    .delete()
+    .eq('user_id', userId)
+    .eq('show_id', showId)
+    .or(orFilter)
+
+  if (error) throw error
+}

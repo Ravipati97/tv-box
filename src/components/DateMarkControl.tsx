@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import type { ReactNode } from 'react'
 import { UNKNOWN_WATCHED_AT } from '../lib/watched'
 
 /**
@@ -17,10 +18,15 @@ export default function DateMarkControl({
   label,
   onConfirm,
   className,
+  confirmSummary,
 }: {
   label: string
   onConfirm: (input: { watchedAt: string; unknownDate: boolean }) => Promise<void>
   className?: string
+  /** Shown above the date picker once expanded -- e.g. "This will overwrite
+   * the date on 3 already-watched episodes." A bulk action's real
+   * consequences should be visible before the Confirm tap, not just after. */
+  confirmSummary?: ReactNode
 }) {
   const [open, setOpen] = useState(false)
   const [date, setDate] = useState(() => new Date().toISOString().slice(0, 10))
@@ -42,6 +48,7 @@ export default function DateMarkControl({
 
   return (
     <div className="flex flex-col gap-1.5">
+      {confirmSummary && <p className="max-w-xs text-[11px] text-warning">{confirmSummary}</p>}
       <div className="flex flex-wrap items-center gap-1.5">
         <input
           type="date"
