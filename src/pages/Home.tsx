@@ -2,11 +2,14 @@ import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import { useAuth } from '../contexts/AuthContext'
-import { fetchRecentShowRatings } from '../lib/showRatings'
-import { fetchRecentWatched } from '../lib/watched'
-import { summarizeShowActivity, nowWatching } from '../lib/showActivity'
+import { fetchRecentShowRatings, fetchRecentShowRatingsAllUsers } from '../lib/showRatings'
+import { fetchRecentWatched, fetchRecentWatchedAllUsers } from '../lib/watched'
+import { summarizeShowActivity, nowWatching, watchHistory, buildGroupActivity } from '../lib/showActivity'
+import type { GroupActivityEvent } from '../lib/showActivity'
 import { posterUrl } from '../lib/tmdb'
 import { formatShortDate } from '../lib/date'
+import HistorySection from '../components/HistorySection'
+import ActivityRow from '../components/ActivityRow'
 import type { EpisodeWatched, ShowRating } from '../types'
 
 function greeting(): string {
@@ -23,6 +26,9 @@ export default function Home() {
   const [watched, setWatched] = useState<EpisodeWatched[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+
+  const [groupActivity, setGroupActivity] = useState<GroupActivityEvent[]>([])
+  const [loadingGroup, setLoadingGroup] = useState(true)
 
   useEffect(() => {
     if (!user) return
@@ -47,10 +53,28 @@ export default function Home() {
     }
   }, [user])
 
-  const watching = useMemo(
-    () => nowWatching(summarizeShowActivity(ratings, watched)),
-    [ratings, watched],
-  )
+  useEffect(() => {
+    let cancelled = false
+    setLoadingGroup(true)
+    Promise.all([fetchRecentShowRatingsAllUsers(150), fetchRecentWatchedAllUsers(400)])
+      .then(([ratingRows, watchedRows]) => {
+        if (!cancelled) setGroupActivity(buildGroupActivity(ratingRows, watchedRows))
+      })
+      .catch(() => {
+        // The teaser is a nice-to-have -- fail quietly, the full page will surface errors.
+      })
+      .finally(() => {
+        if (!cancelled) setLoadingGroup(false)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
+  const activity = useMemo(() => summarizeShowActivity(ratings, watched), [ratings, watched])
+  const watching = useMemo(() => nowWatching(activity), [activity])
+  const history = useMemo(() => watchHistory(activity), [activity])
+  const recentGroupActivity = groupActivity.slice(0, 5)
 
   return (
     <div className="mx-auto max-w-5xl px-4 pb-24 pt-6 sm:px-6 md:pb-10">
@@ -80,7 +104,7 @@ export default function Home() {
           ))}
         </div>
       ) : watching.length === 0 ? (
-        <div className="mt-14 flex flex-col items-center rounded-2xl border border-hairline bg-base-850/40 px-6 py-14 text-center">
+        <div className="mt-4 flex flex-col items-center rounded-2xl border border-hairline bg-base-850/40 px-6 py-14 text-center">
           <div className="mb-3 text-4xl">📺</div>
           <p className="max-w-xs text-sm text-base-500">
             Nothing in progress. Mark an episode watched on any show and it&apos;ll show up here.
@@ -142,6 +166,43 @@ export default function Home() {
               </motion.div>
             )
           })}
+        </div>
+      )}
+
+      {/* History -- everything finished or rated, right below what's in progress. */}
+      {!loading && history.length > 0 && (
+        <div className="mt-12">
+          <h2 className="font-display mb-4 text-lg font-semibold text-base-100">Your History</h2>
+          <HistorySection
+            activity={history}
+            username={user?.username ?? ''}
+            emptyMessage="Nothing finished yet."
+          />
+        </div>
+      )}
+
+      {/* Recently in the group -- a taste of the full Activity feed, right on Home. */}
+      {(loadingGroup || recentGroupActivity.length > 0) && (
+        <div className="mt-12">
+          <div className="mb-4 flex items-center justify-between">
+            <h2 className="font-display text-lg font-semibold text-base-100">Recently in the group</h2>
+            <Link to="/activity" className="text-xs font-medium text-accent-400 hover:underline">
+              See all &rarr;
+            </Link>
+          </div>
+          {loadingGroup ? (
+            <div className="space-y-2">
+              {Array.from({ length: 3 }).map((_, i) => (
+                <div key={i} className="h-16 animate-pulse rounded-xl bg-base-850/70" />
+              ))}
+            </div>
+          ) : (
+            <div className="space-y-2">
+              {recentGroupActivity.map((event) => (
+                <ActivityRow key={event.key} event={event} />
+              ))}
+            </div>
+          )}
         </div>
       )}
     </div>

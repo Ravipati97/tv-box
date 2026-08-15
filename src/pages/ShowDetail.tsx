@@ -26,6 +26,7 @@ import {
   watchedKey,
 } from '../lib/watched'
 import { clearStreamingOverride, fetchStreamingOverride, setStreamingOverride } from '../lib/streamingOverrides'
+import { pickBestFreeProvider } from '../lib/streamingProvider'
 import { useAuth } from '../contexts/AuthContext'
 import type {
   ShowRatingWithUser,
@@ -33,22 +34,9 @@ import type {
   TmdbProviderListItem,
   TmdbSeasonDetail,
   TmdbShowDetail,
-  TmdbWatchProvider,
   TmdbWatchProviders,
   WatchedMap,
 } from '../types'
-
-/** Providers can repeat across flatrate/rent/buy -- keep one, sorted the way TMDB ranks them. */
-function dedupeProviders(list: TmdbWatchProvider[]): TmdbWatchProvider[] {
-  const seen = new Set<number>()
-  return list
-    .filter((p) => {
-      if (seen.has(p.provider_id)) return false
-      seen.add(p.provider_id)
-      return true
-    })
-    .sort((a, b) => a.display_priority - b.display_priority)
-}
 
 export default function ShowDetail() {
   const { id } = useParams<{ id: string }>()
@@ -148,16 +136,9 @@ export default function ShowDetail() {
   const region = useMemo(() => detectRegion(), [])
   const regionProviders = providers?.results[region] ?? null
 
-  // The single best-guess "free to you" answer -- included with a
-  // subscription first, then genuinely free/ad-supported. Deliberately never
-  // rent/buy here: those cost extra, so they're not "free" by any reading.
-  const bestFreeProvider = useMemo(() => {
-    if (!regionProviders) return null
-    const flatrate = dedupeProviders(regionProviders.flatrate ?? [])
-    if (flatrate.length > 0) return flatrate[0]
-    const free = dedupeProviders([...(regionProviders.free ?? []), ...(regionProviders.ads ?? [])])
-    return free[0] ?? null
-  }, [regionProviders])
+  // The single best-guess "free to you" answer -- shared with the History/
+  // Activity "sort by platform" grouping so the two never disagree.
+  const bestFreeProvider = useMemo(() => pickBestFreeProvider(regionProviders), [regionProviders])
 
   // A manual correction always wins over the automatic guess.
   const effectiveProvider: { provider_name: string; logo_path: string | null } | null = override
@@ -332,9 +313,9 @@ export default function ShowDetail() {
         <div className="absolute inset-0 bg-gradient-to-t from-base-950 via-base-950/70 to-base-950/20" />
       </div>
 
-      <div className="mx-auto -mt-20 max-w-5xl px-4 sm:-mt-24 sm:px-6">
-        <div className="flex gap-4 sm:gap-6">
-          <div className="aspect-[2/3] w-28 shrink-0 overflow-hidden rounded-xl bg-base-800 shadow-2xl shadow-black/50 ring-1 ring-hairline-strong sm:w-40">
+      <div className="mx-auto -mt-24 max-w-5xl px-4 sm:-mt-28 sm:px-6 lg:-mt-32">
+        <div className="flex items-start gap-4 sm:gap-6">
+          <div className="aspect-[2/3] w-32 shrink-0 self-start overflow-hidden rounded-xl bg-base-800 shadow-2xl shadow-black/50 ring-1 ring-hairline-strong sm:w-44 lg:w-52">
             {show?.poster_path && (
               <img
                 src={posterUrl(show.poster_path) ?? undefined}

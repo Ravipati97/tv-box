@@ -4,10 +4,10 @@ import { Link } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import { fetchRecentShowRatings } from '../lib/showRatings'
 import { fetchRecentWatched } from '../lib/watched'
-import { summarizeShowActivity, watchHistory, sortHistory } from '../lib/showActivity'
-import type { HistorySort } from '../lib/showActivity'
+import { summarizeShowActivity, watchHistory } from '../lib/showActivity'
 import { posterUrl } from '../lib/tmdb'
-import { dayKey, formatDiaryHeading, formatShortDate } from '../lib/date'
+import { dayKey, formatDiaryHeading } from '../lib/date'
+import HistorySection from './HistorySection'
 import type { EpisodeWatched, ShowRating } from '../types'
 
 interface ProfileActivityProps {
@@ -22,15 +22,8 @@ interface DiaryGroup {
 
 type Tab = 'diary' | 'history'
 
-const SORT_LABELS: Record<HistorySort, string> = {
-  recent: 'Recent',
-  rating: 'Top rated',
-  name: 'A–Z',
-}
-
 export default function ProfileActivity({ userId, username }: ProfileActivityProps) {
   const [tab, setTab] = useState<Tab>('diary')
-  const [sort, setSort] = useState<HistorySort>('recent')
   const [ratings, setRatings] = useState<ShowRating[]>([])
   const [watched, setWatched] = useState<EpisodeWatched[]>([])
   const [loading, setLoading] = useState(true)
@@ -84,7 +77,7 @@ export default function ProfileActivity({ userId, username }: ProfileActivityPro
     return groups
   }, [ratings])
 
-  const history = useMemo(() => sortHistory(watchHistory(activity), sort), [activity, sort])
+  const history = useMemo(() => watchHistory(activity), [activity])
 
   return (
     <div>
@@ -95,34 +88,13 @@ export default function ProfileActivity({ userId, username }: ProfileActivityPro
         <StatCard label="Avg rating" value={stats.avg !== null ? stats.avg.toFixed(1) : '—'} />
       </div>
 
-      <div className="mb-4 flex items-center justify-between gap-2">
-        <div className="flex items-center gap-1">
-          <TabButton active={tab === 'diary'} onClick={() => setTab('diary')}>
-            Diary
-          </TabButton>
-          <TabButton active={tab === 'history'} onClick={() => setTab('history')}>
-            History
-          </TabButton>
-        </div>
-
-        {tab === 'history' && history.length > 0 && (
-          <div className="flex items-center gap-1">
-            {(Object.keys(SORT_LABELS) as HistorySort[]).map((key) => (
-              <button
-                key={key}
-                type="button"
-                onClick={() => setSort(key)}
-                className={`rounded-full px-2.5 py-1 text-xs font-medium transition-colors duration-200 ${
-                  sort === key
-                    ? 'bg-accent-500/15 text-accent-300 ring-1 ring-accent-500/40'
-                    : 'text-base-500 hover:text-base-200'
-                }`}
-              >
-                {SORT_LABELS[key]}
-              </button>
-            ))}
-          </div>
-        )}
+      <div className="mb-4 flex items-center gap-1">
+        <TabButton active={tab === 'diary'} onClick={() => setTab('diary')}>
+          Diary
+        </TabButton>
+        <TabButton active={tab === 'history'} onClick={() => setTab('history')}>
+          History
+        </TabButton>
       </div>
 
       {error && <p className="mb-4 text-sm text-danger">{error}</p>}
@@ -191,63 +163,12 @@ export default function ProfileActivity({ userId, username }: ProfileActivityPro
             ))}
           </div>
         )
-      ) : history.length === 0 ? (
-        <div className="mt-10 flex flex-col items-center text-center">
-          <div className="mb-3 text-4xl">✅</div>
-          <p className="text-sm text-base-500">
-            Nothing finished yet. Shows show up here once every episode is watched, or once
-            they&apos;re rated.
-          </p>
-        </div>
       ) : (
-        <div className="grid grid-cols-2 gap-x-4 gap-y-6 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
-          {history.map((s, i) => (
-            <motion.div
-              key={s.showId}
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.3, delay: Math.min(i, 12) * 0.02 }}
-            >
-              <Link to={`/u/${username}/shows/${s.showId}`} className="group block">
-                <div className="relative aspect-[2/3] overflow-hidden rounded-2xl bg-base-800 ring-1 ring-hairline transition-all duration-300 group-hover:-translate-y-0.5 group-hover:shadow-[0_12px_32px_-8px_rgba(139,92,246,0.35)]">
-                  {s.showPosterPath ? (
-                    <img
-                      src={posterUrl(s.showPosterPath) ?? undefined}
-                      alt={s.showName}
-                      loading="lazy"
-                      decoding="async"
-                      className="h-full w-full object-cover transition-transform duration-500 ease-out group-hover:scale-[1.06]"
-                    />
-                  ) : (
-                    <div className="flex h-full w-full items-center justify-center p-3 text-center text-xs text-base-400">
-                      {s.showName}
-                    </div>
-                  )}
-                  <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/85 to-transparent px-2 pb-1.5 pt-4">
-                    {s.rating !== null ? (
-                      <div className="flex items-center gap-1 text-[11px] font-semibold text-star">
-                        {s.rating.toFixed(1)}
-                        <StarGlyph />
-                      </div>
-                    ) : (
-                      <div className="text-[11px] font-semibold text-accent-400">Finished</div>
-                    )}
-                  </div>
-                </div>
-                <p className="mt-2 truncate text-sm font-medium text-base-100">{s.showName}</p>
-                <p className="text-xs text-base-400">
-                  {s.finishedAt
-                    ? s.finishedAtUnknown
-                      ? 'Watched a while ago'
-                      : formatShortDate(s.finishedAt)
-                    : s.ratedAt
-                      ? formatShortDate(s.ratedAt)
-                      : ''}
-                </p>
-              </Link>
-            </motion.div>
-          ))}
-        </div>
+        <HistorySection
+          activity={history}
+          username={username}
+          emptyMessage="Nothing finished yet. Shows show up here once every episode is watched, or once they're rated."
+        />
       )}
     </div>
   )

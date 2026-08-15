@@ -140,3 +140,8 @@ export interface EpisodeWatched {
 
 /** Keyed lookup: "season-episode" -> watched row, for one user's progress on one show. */
 export type WatchedMap = Record<string, EpisodeWatched>
+
+/** An episode_watched row joined with the watcher's username (group activity view). */
+export interface EpisodeWatchedWithUser extends EpisodeWatched {
+  users: { username: string } | null
+}

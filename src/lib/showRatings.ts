@@ -37,6 +37,18 @@ export async function fetchRecentShowRatings(userId: string, limit = 2000): Prom
   return (data ?? []) as ShowRating[]
 }
 
+/** Most recent ratings across the whole group (every user), for the group Activity feed. */
+export async function fetchRecentShowRatingsAllUsers(limit = 500): Promise<ShowRatingWithUser[]> {
+  const { data, error } = await supabase
+    .from('show_ratings')
+    .select('*, users(username)')
+    .order('rated_at', { ascending: false })
+    .limit(limit)
+
+  if (error) throw error
+  return (data ?? []) as unknown as ShowRatingWithUser[]
+}
+
 export interface UpsertShowRatingInput {
   userId: string
   showId: number

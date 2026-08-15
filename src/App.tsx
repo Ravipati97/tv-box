@@ -15,6 +15,7 @@ import Login from './pages/Login'
 // them (plus TMDB/Supabase calls, plus framer-motion usage) in the first
 // paint's JS.
 const Home = lazy(() => import('./pages/Home'))
+const Activity = lazy(() => import('./pages/Activity'))
 const Search = lazy(() => import('./pages/Search'))
 const ShowDetail = lazy(() => import('./pages/ShowDetail'))
 const Profile = lazy(() => import('./pages/Profile'))
@@ -70,6 +71,16 @@ function AppShell() {
               <ProtectedRoute>
                 <Page>
                   <Home />
+                </Page>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/activity"
+            element={
+              <ProtectedRoute>
+                <Page>
+                  <Activity />
                 </Page>
               </ProtectedRoute>
             }

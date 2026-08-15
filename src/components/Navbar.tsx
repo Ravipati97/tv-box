@@ -40,6 +40,24 @@ function SearchIcon({ active }: { active: boolean }) {
   )
 }
 
+function ActivityIcon({ active }: { active: boolean }) {
+  return (
+    <svg
+      width="21"
+      height="21"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke={active ? 'var(--color-accent-400)' : 'currentColor'}
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <circle cx="12" cy="12" r="9" />
+      <path d="M7.5 12.5h2l1.3-3.4 2 6.8 1.3-3.4h2.4" />
+    </svg>
+  )
+}
+
 function PeopleIcon({ active }: { active: boolean }) {
   return (
     <svg
@@ -125,6 +143,7 @@ function ThemeToggle() {
 
 const NAV_ITEMS = [
   { to: '/home', label: 'Home', Icon: HomeIcon },
+  { to: '/activity', label: 'Activity', Icon: ActivityIcon },
   { to: '/search', label: 'Search', Icon: SearchIcon },
   { to: '/members', label: 'Members', Icon: PeopleIcon },
   { to: '/profile', label: 'Profile', Icon: UserIcon },

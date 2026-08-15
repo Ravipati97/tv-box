@@ -1,4 +1,4 @@
-import type { EpisodeWatched, ShowRating } from '../types'
+import type { EpisodeWatched, EpisodeWatchedWithUser, ShowRating, ShowRatingWithUser } from '../types'
 
 /** Per-show rollup combining a rating (if any) with watch progress (if any). */
 export interface ShowActivity {
@@ -101,7 +101,9 @@ export function watchHistory(summaries: ShowActivity[]): ShowActivity[] {
   return summaries.filter((s) => s.finished || (s.rating !== null && s.watchedCount === 0))
 }
 
-export type HistorySort = 'recent' | 'rating' | 'name'
+// 'platform' isn't a plain array sort (it's a grouping -- see HistorySection),
+// but it lives in the same picker as the others so it's listed here too.
+export type HistorySort = 'recent' | 'rating' | 'finished' | 'name' | 'platform'
 
 export function sortHistory(entries: ShowActivity[], sort: HistorySort): ShowActivity[] {
   const sorted = entries.slice()
@@ -109,6 +111,16 @@ export function sortHistory(entries: ShowActivity[], sort: HistorySort): ShowAct
     sorted.sort((a, b) => (b.rating ?? -1) - (a.rating ?? -1))
   } else if (sort === 'name') {
     sorted.sort((a, b) => a.showName.localeCompare(b.showName))
+  } else if (sort === 'finished') {
+    // Strictly finish date -- shows that were only ever rated (never
+    // episode-tracked) have no finishedAt, so they sink to the bottom
+    // instead of borrowing their rated date the way "recent" does.
+    sorted.sort((a, b) => {
+      if (a.finishedAt && b.finishedAt) return b.finishedAt.localeCompare(a.finishedAt)
+      if (a.finishedAt) return -1
+      if (b.finishedAt) return 1
+      return a.showName.localeCompare(b.showName)
+    })
   } else {
     sorted.sort((a, b) => {
       const aDate = a.finishedAt ?? a.ratedAt ?? ''
@@ -117,4 +129,81 @@ export function sortHistory(entries: ShowActivity[], sort: HistorySort): ShowAct
     })
   }
   return sorted
+}
+
+// --- Group activity feed (every member's ratings/finishes, merged) ---
+
+export interface GroupActivityEvent {
+  /** userId + showId is unique -- one "entry" per person per show, same as History. */
+  key: string
+  userId: string
+  username: string
+  showId: number
+  showName: string
+  showPosterPath: string | null
+  rating: number | null
+  finished: boolean
+  episodeCount: number | null
+  /** finishedAt if finished, otherwise ratedAt -- when this event "happened". */
+  at: string
+  atUnknown: boolean
+}
+
+/**
+ * Merges every member's ratings + watched-episode rows into one
+ * reverse-chronological feed of "who finished/rated what". Reuses
+ * summarizeShowActivity + watchHistory per-user (grouping the flat
+ * multi-user rows first) so the semantics exactly match each person's own
+ * History tab -- a show only ever shows up here once it would show up
+ * there too.
+ */
+export function buildGroupActivity(
+  ratings: ShowRatingWithUser[],
+  watched: EpisodeWatchedWithUser[],
+): GroupActivityEvent[] {
+  interface UserBucket {
+    username: string
+    ratings: ShowRating[]
+    watched: EpisodeWatched[]
+  }
+  const byUser = new Map<string, UserBucket>()
+
+  function bucketFor(userId: string, username: string | undefined): UserBucket {
+    let bucket = byUser.get(userId)
+    if (!bucket) {
+      bucket = { username: username ?? 'unknown', ratings: [], watched: [] }
+      byUser.set(userId, bucket)
+    } else if (username) {
+      bucket.username = username
+    }
+    return bucket
+  }
+
+  for (const r of ratings) bucketFor(r.user_id, r.users?.username).ratings.push(r)
+  for (const w of watched) bucketFor(w.user_id, w.users?.username).watched.push(w)
+
+  const events: GroupActivityEvent[] = []
+  for (const [userId, bucket] of byUser) {
+    const history = watchHistory(summarizeShowActivity(bucket.ratings, bucket.watched))
+    for (const s of history) {
+      const at = s.finishedAt ?? s.ratedAt
+      if (!at) continue
+      events.push({
+        key: `${userId}-${s.showId}`,
+        userId,
+        username: bucket.username,
+        showId: s.showId,
+        showName: s.showName,
+        showPosterPath: s.showPosterPath,
+        rating: s.rating,
+        finished: s.finished,
+        episodeCount: s.finished ? s.totalEpisodes : null,
+        at,
+        atUnknown: s.finished ? s.finishedAtUnknown : false,
+      })
+    }
+  }
+
+  events.sort((a, b) => b.at.localeCompare(a.at))
+  return events
 }

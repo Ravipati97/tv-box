@@ -1,5 +1,5 @@
 import { supabase } from './supabase'
-import type { EpisodeWatched, WatchedMap } from '../types'
+import type { EpisodeWatched, EpisodeWatchedWithUser, WatchedMap } from '../types'
 
 export function watchedKey(seasonNumber: number, episodeNumber: number): string {
   return `${seasonNumber}-${episodeNumber}`
@@ -56,6 +56,19 @@ export async function fetchRecentWatched(userId: string, limit = 2000): Promise<
 
   if (error) throw error
   return (data ?? []) as EpisodeWatched[]
+}
+
+/** Most recent watched-episode rows across the whole group (every user), for the group
+ * Activity feed -- used to work out who just finished a show, not shown episode-by-episode. */
+export async function fetchRecentWatchedAllUsers(limit = 1500): Promise<EpisodeWatchedWithUser[]> {
+  const { data, error } = await supabase
+    .from('episode_watched')
+    .select('*, users(username)')
+    .order('watched_at', { ascending: false })
+    .limit(limit)
+
+  if (error) throw error
+  return (data ?? []) as unknown as EpisodeWatchedWithUser[]
 }
 
 export interface MarkWatchedInput {
