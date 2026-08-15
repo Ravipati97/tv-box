@@ -313,7 +313,12 @@ export default function ShowDetail() {
         <div className="absolute inset-0 bg-gradient-to-t from-base-950 via-base-950/70 to-base-950/20" />
       </div>
 
-      <div className="mx-auto -mt-24 max-w-5xl px-4 sm:-mt-28 sm:px-6 lg:-mt-32">
+      {/* relative: the hero above is a positioned element (position: relative
+          for its own overflow-hidden crop), so without this, this static
+          sibling would paint *behind* it wherever the negative margin makes
+          them overlap -- silently clipping the top of the poster even though
+          the poster's own box is sized perfectly correctly. */}
+      <div className="relative mx-auto -mt-24 max-w-5xl px-4 sm:-mt-28 sm:px-6 lg:-mt-32">
         <div className="flex items-start gap-4 sm:gap-6">
           <div className="aspect-[2/3] w-32 shrink-0 self-start overflow-hidden rounded-xl bg-base-800 shadow-2xl shadow-black/50 ring-1 ring-hairline-strong sm:w-44 lg:w-52">
             {show?.poster_path && (
