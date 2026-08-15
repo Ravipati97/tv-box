@@ -36,7 +36,7 @@ export default function Login() {
   const emailInputRef = useDesktopAutoFocus(step === 'email')
   const usernameInputRef = useDesktopAutoFocus(step === 'username')
 
-  if (user) return <Navigate to="/search" replace />
+  if (user) return <Navigate to="/home" replace />
 
   async function handleEmailSubmit(e: FormEvent) {
     e.preventDefault()
