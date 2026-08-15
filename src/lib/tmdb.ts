@@ -1,4 +1,10 @@
-import type { TmdbSeasonDetail, TmdbShowDetail, TmdbShowSummary, TmdbWatchProviders } from '../types'
+import type {
+  TmdbProviderListItem,
+  TmdbSeasonDetail,
+  TmdbShowDetail,
+  TmdbShowSummary,
+  TmdbWatchProviders,
+} from '../types'
 
 const API_BASE = 'https://api.themoviedb.org/3'
 const IMAGE_BASE = 'https://image.tmdb.org/t/p'
@@ -52,6 +58,18 @@ export async function getSeasonDetail(
 /** Streaming/rent/buy availability by country, sourced from JustWatch via TMDB. */
 export async function getWatchProviders(showId: number): Promise<TmdbWatchProviders> {
   return tmdbFetch<TmdbWatchProviders>(`/tv/${showId}/watch/providers`)
+}
+
+/** Every streaming provider TMDB knows about for a region -- powers the manual "fix it" picker. */
+export async function getAllTvProviders(region: string): Promise<TmdbProviderListItem[]> {
+  const data = await tmdbFetch<{ results: TmdbProviderListItem[] }>('/watch/providers/tv', {
+    watch_region: region,
+  })
+  return (data.results ?? []).slice().sort((a, b) => {
+    const ap = a.display_priorities[region] ?? a.display_priority
+    const bp = b.display_priorities[region] ?? b.display_priority
+    return ap - bp
+  })
 }
 
 /** Best-guess 2-letter region from the browser's own locale, falling back to US. */

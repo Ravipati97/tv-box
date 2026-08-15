@@ -74,6 +74,27 @@ export interface TmdbWatchProviders {
   results: Record<string, TmdbWatchProviderRegion>
 }
 
+/** One entry from the full /watch/providers/tv list (every provider TMDB knows about). */
+export interface TmdbProviderListItem {
+  provider_id: number
+  provider_name: string
+  logo_path: string | null
+  display_priority: number
+  display_priorities: Record<string, number>
+}
+
+// --- Manual "where to watch" correction (shared across the group) ---
+
+export interface StreamingOverride {
+  id: string
+  show_id: number
+  provider_id: number | null
+  provider_name: string
+  provider_logo_path: string | null
+  updated_by: string | null
+  updated_at: string
+}
+
 // --- App / Supabase shapes ---
 
 /** A registered TV Box user. No password/verification -- see AuthContext. */

@@ -184,3 +184,44 @@ drop policy if exists "Anyone can delete watched episodes" on public.episode_wat
 create policy "Anyone can delete watched episodes"
   on public.episode_watched for delete
   using (true);
+
+-- Manual correction for "where to watch", shared across the whole group (not
+-- per-user) -- streaming availability is an objective regional fact, not a
+-- matter of taste, so one correction should fix it for everyone rather than
+-- each person having to notice and fix it themselves. One row per show;
+-- setting a new override just replaces the old one (last editor wins, same
+-- spirit as everything else in this no-real-auth app).
+create table if not exists public.show_streaming_overrides (
+  id uuid primary key default gen_random_uuid(),
+  show_id integer not null unique,
+
+  provider_id integer,
+  provider_name text not null,
+  provider_logo_path text,
+
+  updated_by uuid references public.users(id) on delete set null,
+  updated_at timestamptz not null default now()
+);
+
+alter table public.show_streaming_overrides enable row level security;
+
+drop policy if exists "Anyone can read streaming overrides" on public.show_streaming_overrides;
+create policy "Anyone can read streaming overrides"
+  on public.show_streaming_overrides for select
+  using (true);
+
+drop policy if exists "Anyone can insert streaming overrides" on public.show_streaming_overrides;
+create policy "Anyone can insert streaming overrides"
+  on public.show_streaming_overrides for insert
+  with check (true);
+
+drop policy if exists "Anyone can update streaming overrides" on public.show_streaming_overrides;
+create policy "Anyone can update streaming overrides"
+  on public.show_streaming_overrides for update
+  using (true)
+  with check (true);
+
+drop policy if exists "Anyone can delete streaming overrides" on public.show_streaming_overrides;
+create policy "Anyone can delete streaming overrides"
+  on public.show_streaming_overrides for delete
+  using (true);

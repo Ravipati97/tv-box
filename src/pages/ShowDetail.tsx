@@ -8,6 +8,7 @@ import { EpisodeRowSkeleton } from '../components/Skeletons'
 import {
   backdropUrl,
   detectRegion,
+  getAllTvProviders,
   getSeasonDetail,
   getShowDetail,
   getWatchProviders,
@@ -24,9 +25,12 @@ import {
   unmarkWatched,
   watchedKey,
 } from '../lib/watched'
+import { clearStreamingOverride, fetchStreamingOverride, setStreamingOverride } from '../lib/streamingOverrides'
 import { useAuth } from '../contexts/AuthContext'
 import type {
   ShowRatingWithUser,
+  StreamingOverride,
+  TmdbProviderListItem,
   TmdbSeasonDetail,
   TmdbShowDetail,
   TmdbWatchProvider,
@@ -62,6 +66,8 @@ export default function ShowDetail() {
   const [savingRating, setSavingRating] = useState(false)
   const [showRatersList, setShowRatersList] = useState(false)
   const [providers, setProviders] = useState<TmdbWatchProviders | null>(null)
+  const [override, setOverride] = useState<StreamingOverride | null>(null)
+  const [pickerOpen, setPickerOpen] = useState(false)
 
   // Load show detail + my watch progress + everyone's show rating, in parallel.
   useEffect(() => {
@@ -118,7 +124,7 @@ export default function ShowDetail() {
   }, [showId, activeSeason])
 
   // Where-to-watch is a nice-to-have -- fetch it separately so a hiccup on
-  // this endpoint never blocks or errors out the rest of the page.
+  // either of these endpoints never blocks or errors out the rest of the page.
   useEffect(() => {
     if (Number.isNaN(showId)) return
     let cancelled = false
@@ -129,6 +135,11 @@ export default function ShowDetail() {
       .catch(() => {
         // Silently skip the section rather than surfacing an error for this.
       })
+    fetchStreamingOverride(showId)
+      .then((data) => {
+        if (!cancelled) setOverride(data)
+      })
+      .catch(() => {})
     return () => {
       cancelled = true
     }
@@ -137,13 +148,21 @@ export default function ShowDetail() {
   const region = useMemo(() => detectRegion(), [])
   const regionProviders = providers?.results[region] ?? null
 
-  const { providerList, providerKind } = useMemo(() => {
-    if (!regionProviders) return { providerList: [] as TmdbWatchProvider[], providerKind: null as 'stream' | 'rent' | null }
-    const stream = dedupeProviders(regionProviders.flatrate ?? [])
-    if (stream.length > 0) return { providerList: stream, providerKind: 'stream' as const }
-    const rentBuy = dedupeProviders([...(regionProviders.rent ?? []), ...(regionProviders.buy ?? [])])
-    return { providerList: rentBuy, providerKind: rentBuy.length > 0 ? ('rent' as const) : null }
+  // The single best-guess "free to you" answer -- included with a
+  // subscription first, then genuinely free/ad-supported. Deliberately never
+  // rent/buy here: those cost extra, so they're not "free" by any reading.
+  const bestFreeProvider = useMemo(() => {
+    if (!regionProviders) return null
+    const flatrate = dedupeProviders(regionProviders.flatrate ?? [])
+    if (flatrate.length > 0) return flatrate[0]
+    const free = dedupeProviders([...(regionProviders.free ?? []), ...(regionProviders.ads ?? [])])
+    return free[0] ?? null
   }, [regionProviders])
+
+  // A manual correction always wins over the automatic guess.
+  const effectiveProvider: { provider_name: string; logo_path: string | null } | null = override
+    ? { provider_name: override.provider_name, logo_path: override.provider_logo_path }
+    : bestFreeProvider
 
   const watchedCount = Object.keys(watched).length
   const totalEpisodes = show?.number_of_episodes ?? null
@@ -240,6 +259,25 @@ export default function ShowDetail() {
       for (const row of saved) next[watchedKey(row.season_number, row.episode_number)] = row
       return next
     })
+  }
+
+  async function handlePickProvider(p: TmdbProviderListItem) {
+    if (!user || !show) return
+    const saved = await setStreamingOverride({
+      showId: show.id,
+      providerId: p.provider_id,
+      providerName: p.provider_name,
+      providerLogoPath: p.logo_path,
+      updatedBy: user.id,
+    })
+    setOverride(saved)
+    setPickerOpen(false)
+  }
+
+  async function handleClearOverride() {
+    if (!show) return
+    await clearStreamingOverride(show.id)
+    setOverride(null)
   }
 
   async function handleRateShow(value: number) {
@@ -439,44 +477,72 @@ export default function ShowDetail() {
           </div>
         )}
 
-        {/* Where to watch */}
-        {regionProviders && providerList.length > 0 && (
+        {/* Where to watch -- one clear answer, correctable by anyone in the group */}
+        {(effectiveProvider || regionProviders) && (
           <div className="mt-5">
             <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-base-500">
-              {providerKind === 'stream' ? 'Streaming' : 'Rent or buy'}
+              Streaming
             </p>
-            <div className="flex flex-wrap items-center gap-2">
-              {providerList.map((p) => (
-                <a
-                  key={p.provider_id}
-                  href={regionProviders.link}
-                  target="_blank"
-                  rel="noreferrer"
-                  title={p.provider_name}
-                  className="block h-10 w-10 shrink-0 overflow-hidden rounded-lg bg-base-800 ring-1 ring-white/10 transition-transform duration-150 hover:scale-105"
-                >
-                  {providerLogoUrl(p.logo_path) ? (
+            {effectiveProvider ? (
+              <div className="flex items-center gap-2.5">
+                <div className="h-10 w-10 shrink-0 overflow-hidden rounded-lg bg-base-800 ring-1 ring-white/10">
+                  {providerLogoUrl(effectiveProvider.logo_path) ? (
                     <img
-                      src={providerLogoUrl(p.logo_path) ?? undefined}
-                      alt={p.provider_name}
+                      src={providerLogoUrl(effectiveProvider.logo_path) ?? undefined}
+                      alt={effectiveProvider.provider_name}
                       className="h-full w-full object-cover"
                     />
                   ) : (
                     <div className="flex h-full w-full items-center justify-center text-center text-[8px] leading-tight text-base-400">
-                      {p.provider_name}
+                      {effectiveProvider.provider_name}
                     </div>
                   )}
+                </div>
+                <div>
+                  <p className="text-sm font-medium text-base-100">{effectiveProvider.provider_name}</p>
+                  {override && <p className="text-[11px] text-base-500">Set manually</p>}
+                </div>
+              </div>
+            ) : (
+              <p className="text-sm text-base-500">Not free to stream in your region right now.</p>
+            )}
+
+            <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1">
+              <button
+                type="button"
+                onClick={() => setPickerOpen((v) => !v)}
+                className="text-[11px] text-accent-400 hover:underline"
+              >
+                {effectiveProvider ? "Not right? Fix it" : 'Know where? Set it'}
+              </button>
+              {override && (
+                <button
+                  type="button"
+                  onClick={handleClearOverride}
+                  className="text-[11px] text-base-500 hover:text-base-300"
+                >
+                  Reset to automatic
+                </button>
+              )}
+              {regionProviders && (
+                <a
+                  href={regionProviders.link}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="text-[11px] text-base-500 hover:text-base-300"
+                >
+                  See all options (JustWatch)
                 </a>
-              ))}
+              )}
             </div>
-            <a
-              href={regionProviders.link}
-              target="_blank"
-              rel="noreferrer"
-              className="mt-1.5 inline-block text-[11px] text-base-500 hover:text-base-300"
-            >
-              Streaming data via JustWatch
-            </a>
+
+            {pickerOpen && (
+              <ProviderPicker
+                region={region}
+                onPick={handlePickProvider}
+                onClose={() => setPickerOpen(false)}
+              />
+            )}
           </div>
         )}
 
@@ -612,6 +678,110 @@ function BulkMarkControl({
         />
         Don&apos;t remember exactly when — just log it as watched a while ago
       </label>
+    </div>
+  )
+}
+
+/**
+ * Small searchable panel for manually correcting "where to watch" -- backed
+ * by TMDB's full provider list (not just the ones already known for this
+ * show), since the whole point is fixing a wrong or missing automatic guess.
+ */
+function ProviderPicker({
+  region,
+  onPick,
+  onClose,
+}: {
+  region: string
+  onPick: (provider: TmdbProviderListItem) => void | Promise<void>
+  onClose: () => void
+}) {
+  const [query, setQuery] = useState('')
+  const [allProviders, setAllProviders] = useState<TmdbProviderListItem[] | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [saving, setSaving] = useState(false)
+
+  useEffect(() => {
+    let cancelled = false
+    setLoading(true)
+    getAllTvProviders(region)
+      .then((data) => {
+        if (!cancelled) setAllProviders(data)
+      })
+      .catch(() => {
+        if (!cancelled) setAllProviders([])
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [region])
+
+  const matches = useMemo(() => {
+    if (!allProviders) return []
+    const q = query.trim().toLowerCase()
+    const filtered = q ? allProviders.filter((p) => p.provider_name.toLowerCase().includes(q)) : allProviders
+    return filtered.slice(0, 8)
+  }, [allProviders, query])
+
+  return (
+    <div className="mt-2 rounded-xl border border-white/10 bg-base-900 p-3">
+      <div className="flex items-center justify-between gap-2">
+        <input
+          autoFocus
+          type="text"
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          placeholder="Search platforms (Netflix, Hulu, Max...)"
+          className="w-full rounded-lg border border-white/10 bg-base-950 px-2.5 py-1.5 text-xs text-base-200 placeholder:text-base-600"
+        />
+        <button
+          type="button"
+          onClick={onClose}
+          className="shrink-0 text-xs text-base-500 hover:text-base-300"
+        >
+          Close
+        </button>
+      </div>
+      <div className="mt-2 max-h-56 overflow-y-auto">
+        {loading ? (
+          <p className="px-1 py-2 text-xs text-base-500">Loading platforms…</p>
+        ) : matches.length === 0 ? (
+          <p className="px-1 py-2 text-xs text-base-500">No matches.</p>
+        ) : (
+          <div className="flex flex-col gap-0.5">
+            {matches.map((p) => (
+              <button
+                key={p.provider_id}
+                type="button"
+                disabled={saving}
+                onClick={async () => {
+                  setSaving(true)
+                  try {
+                    await onPick(p)
+                  } finally {
+                    setSaving(false)
+                  }
+                }}
+                className="flex items-center gap-2 rounded-lg px-1.5 py-1.5 text-left text-xs text-base-200 transition-colors duration-150 hover:bg-white/5 disabled:opacity-50"
+              >
+                <div className="h-6 w-6 shrink-0 overflow-hidden rounded bg-base-800 ring-1 ring-white/10">
+                  {providerLogoUrl(p.logo_path) ? (
+                    <img
+                      src={providerLogoUrl(p.logo_path) ?? undefined}
+                      alt={p.provider_name}
+                      className="h-full w-full object-cover"
+                    />
+                  ) : null}
+                </div>
+                {p.provider_name}
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
     </div>
   )
 }
