@@ -113,6 +113,8 @@ export interface EpisodeWatched {
   episode_number: number
   episode_name: string | null
   watched_at: string
+  /** True when the actual date wasn't known and watched_at is just a placeholder. */
+  watched_at_unknown: boolean
 }
 
 /** Keyed lookup: "season-episode" -> watched row, for one user's progress on one show. */

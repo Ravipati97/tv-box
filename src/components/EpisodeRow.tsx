@@ -8,10 +8,17 @@ interface EpisodeRowProps {
   episode: TmdbEpisode
   watched: boolean
   watchedAt: string | null
+  watchedAtUnknown: boolean
   onToggleWatched: () => Promise<void>
 }
 
-export default function EpisodeRow({ episode, watched, watchedAt, onToggleWatched }: EpisodeRowProps) {
+export default function EpisodeRow({
+  episode,
+  watched,
+  watchedAt,
+  watchedAtUnknown,
+  onToggleWatched,
+}: EpisodeRowProps) {
   const [saving, setSaving] = useState(false)
   const [expanded, setExpanded] = useState(false)
   const still = stillUrl(episode.still_path)
@@ -86,7 +93,11 @@ export default function EpisodeRow({ episode, watched, watchedAt, onToggleWatche
               }`}
             >
               <CheckGlyph filled={watched} />
-              {watched ? `Watched${watchedAt ? ` ${formatShortDate(watchedAt)}` : ''}` : 'Mark watched'}
+              {watched
+                ? watchedAtUnknown
+                  ? 'Watched a while ago'
+                  : `Watched${watchedAt ? ` ${formatShortDate(watchedAt)}` : ''}`
+                : 'Mark watched'}
               {saving && (
                 <span className="ml-0.5 h-3 w-3 animate-spin rounded-full border-2 border-current/30 border-t-current" />
               )}

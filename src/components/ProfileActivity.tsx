@@ -233,7 +233,13 @@ export default function ProfileActivity({ userId, username }: ProfileActivityPro
                 </div>
                 <p className="mt-2 truncate text-sm font-medium text-base-100">{s.showName}</p>
                 <p className="text-xs text-base-400">
-                  {(s.finishedAt ?? s.ratedAt) ? formatShortDate((s.finishedAt ?? s.ratedAt)!) : ''}
+                  {s.finishedAt
+                    ? s.finishedAtUnknown
+                      ? 'Watched a while ago'
+                      : formatShortDate(s.finishedAt)
+                    : s.ratedAt
+                      ? formatShortDate(s.ratedAt)
+                      : ''}
                 </p>
               </Link>
             </motion.div>

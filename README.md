@@ -11,6 +11,7 @@ Letterboxd, but for TV shows — search a show, rate it, and track what you've w
 - **Search** — find any TV show from the Search tab.
 - **Rate** — open a show and give it one star rating (half-star precision). Tap the same rating again to clear it.
 - **Track episodes** — mark episodes watched as you go; the show page shows your progress (e.g. "12/24 watched"), and in-progress shows automatically show up on Home until you finish them.
+- **Log old favorites** — already watched a show before you started using TV Box? "Mark all watched" (whole show or just a season) logs it in one go, with a date picker so it lands correctly in your history. Don't remember exactly when? Check "don't remember exactly when" and it's logged as watched a while ago instead of guessing a date.
 - **See what others rated** — the show page also shows everyone else's rating for it; tap it to see who rated what.
 - **Where to watch** — the show page shows which services it's streaming, renting, or buying on, based on your browser's region (data from JustWatch via TMDB).
 - **Members** — browse everyone who's registered and check out their diaries.

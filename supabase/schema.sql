@@ -149,6 +149,15 @@ create table if not exists public.episode_watched (
   unique (user_id, show_id, season_number, episode_number)
 );
 
+-- Added after episode_watched already existed in production, so this is an
+-- ALTER (CREATE TABLE IF NOT EXISTS above is a no-op on an existing table
+-- and would silently skip new columns). True when the person logging this
+-- didn't remember the actual date -- watched_at still holds a placeholder
+-- timestamp (so the column can stay NOT NULL), but the UI shows "watched a
+-- while ago" instead of that placeholder whenever this is true.
+alter table public.episode_watched
+  add column if not exists watched_at_unknown boolean not null default false;
+
 create index if not exists episode_watched_user_id_idx on public.episode_watched (user_id);
 create index if not exists episode_watched_user_show_idx on public.episode_watched (user_id, show_id);
 create index if not exists episode_watched_watched_at_idx on public.episode_watched (user_id, watched_at desc);

@@ -113,7 +113,9 @@ export default function Home() {
                   <p className="text-xs text-base-400">
                     {s.watchedCount}
                     {s.totalEpisodes ? `/${s.totalEpisodes}` : ''} watched
-                    {s.lastWatchedAt ? ` · ${formatShortDate(s.lastWatchedAt)}` : ''}
+                    {s.lastWatchedAt
+                      ? ` · ${s.lastWatchedAtUnknown ? 'a while ago' : formatShortDate(s.lastWatchedAt)}`
+                      : ''}
                   </p>
                   {pct !== null && (
                     <div className="mt-1.5 h-1 w-full overflow-hidden rounded-full bg-base-800">

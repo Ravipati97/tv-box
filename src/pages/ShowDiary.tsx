@@ -149,7 +149,9 @@ export default function ShowDiary() {
                         S{w.season_number} · E{w.episode_number}
                         {w.episode_name ? ` — ${w.episode_name}` : ''}
                       </p>
-                      <p className="text-xs text-base-500">{formatShortDate(w.watched_at)}</p>
+                      <p className="text-xs text-base-500">
+                        {w.watched_at_unknown ? 'Watched a while ago' : formatShortDate(w.watched_at)}
+                      </p>
                     </div>
                   </motion.li>
                 ))}

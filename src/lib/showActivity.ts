@@ -11,9 +11,12 @@ export interface ShowActivity {
   /** Snapshot of the show's total episode count, or null if never watched/unknown. */
   totalEpisodes: number | null
   lastWatchedAt: string | null
+  /** True if lastWatchedAt is a placeholder -- render "watched a while ago", not the date. */
+  lastWatchedAtUnknown: boolean
   finished: boolean
   /** Same as lastWatchedAt when finished, for clarity at call sites. */
   finishedAt: string | null
+  finishedAtUnknown: boolean
 }
 
 /** Merges show_ratings + episode_watched rows (for one user) into one summary per show. */
@@ -35,8 +38,10 @@ export function summarizeShowActivity(
         watchedCount: 0,
         totalEpisodes: null,
         lastWatchedAt: null,
+        lastWatchedAtUnknown: false,
         finished: false,
         finishedAt: null,
+        finishedAtUnknown: false,
       }
       map.set(showId, entry)
     }
@@ -63,12 +68,18 @@ export function summarizeShowActivity(
       if (r.show_total_episodes == null) return max
       return max === null ? r.show_total_episodes : Math.max(max, r.show_total_episodes)
     }, null)
-    entry.lastWatchedAt = rows.reduce<string | null>(
-      (latest, r) => (!latest || r.watched_at > latest ? r.watched_at : latest),
-      null,
-    )
+    // Epoch (UNKNOWN_WATCHED_AT) always loses this comparison against a real
+    // date, so a show with even one precisely-dated episode correctly picks
+    // that as "last watched" -- only an all-unknown show ends up flagged.
+    for (const r of rows) {
+      if (!entry.lastWatchedAt || r.watched_at > entry.lastWatchedAt) {
+        entry.lastWatchedAt = r.watched_at
+        entry.lastWatchedAtUnknown = r.watched_at_unknown
+      }
+    }
     entry.finished = entry.totalEpisodes !== null && entry.watchedCount >= entry.totalEpisodes
     entry.finishedAt = entry.finished ? entry.lastWatchedAt : null
+    entry.finishedAtUnknown = entry.finished ? entry.lastWatchedAtUnknown : false
   }
 
   return Array.from(map.values())

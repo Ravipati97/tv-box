@@ -5,6 +5,16 @@ export function watchedKey(seasonNumber: number, episodeNumber: number): string 
   return `${seasonNumber}-${episodeNumber}`
 }
 
+/**
+ * Placeholder timestamp for "watched at some point, don't know when" -- the
+ * column is NOT NULL so we still need a value, and epoch sorts before every
+ * real watch date, so unknown-date entries naturally fall to the back of any
+ * "most recent" sort without special-casing. Never shown to the user
+ * directly -- always paired with watched_at_unknown, which is what the UI
+ * actually checks before rendering a date.
+ */
+export const UNKNOWN_WATCHED_AT = new Date(0).toISOString()
+
 /** All of one user's watched episodes for a show (every season), keyed for quick lookup. */
 export async function fetchWatchedForShow(userId: string, showId: number): Promise<WatchedMap> {
   const { data, error } = await supabase
@@ -73,6 +83,9 @@ export async function markWatched(input: MarkWatchedInput): Promise<EpisodeWatch
         episode_number: input.episodeNumber,
         episode_name: input.episodeName,
         watched_at: new Date().toISOString(),
+        // Real-time single toggle -- always a known, current date, even if
+        // this episode previously carried an unknown-date bulk mark.
+        watched_at_unknown: false,
       },
       { onConflict: 'user_id,show_id,season_number,episode_number' },
     )
@@ -92,6 +105,8 @@ export interface BulkMarkWatchedInput {
   episodes: { seasonNumber: number; episodeNumber: number; episodeName?: string | null }[]
   /** ISO timestamp stamped on every row -- lets a bulk log land on the right date in History. */
   watchedAt: string
+  /** True if watchedAt is just UNKNOWN_WATCHED_AT rather than a real date. */
+  watchedAtUnknown?: boolean
 }
 
 /**
@@ -111,6 +126,7 @@ export async function bulkMarkWatched(input: BulkMarkWatchedInput): Promise<Epis
     episode_number: ep.episodeNumber,
     episode_name: ep.episodeName ?? null,
     watched_at: input.watchedAt,
+    watched_at_unknown: input.watchedAtUnknown ?? false,
   }))
 
   const { data, error } = await supabase

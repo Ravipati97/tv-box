@@ -16,7 +16,14 @@ import {
   yearFromDate,
 } from '../lib/tmdb'
 import { fetchAllShowRatings, upsertShowRating, deleteShowRating } from '../lib/showRatings'
-import { bulkMarkWatched, fetchWatchedForShow, markWatched, unmarkWatched, watchedKey } from '../lib/watched'
+import {
+  bulkMarkWatched,
+  fetchWatchedForShow,
+  markWatched,
+  UNKNOWN_WATCHED_AT,
+  unmarkWatched,
+  watchedKey,
+} from '../lib/watched'
 import { useAuth } from '../contexts/AuthContext'
 import type {
   ShowRatingWithUser,
@@ -184,7 +191,7 @@ export default function ShowDetail() {
     setWatched((prev) => ({ ...prev, [key]: saved }))
   }
 
-  async function handleMarkAllWatched(dateIso: string) {
+  async function handleMarkAllWatched(input: { watchedAt: string; unknownDate: boolean }) {
     if (!user || !show) return
     const episodes = show.seasons
       .filter((s) => s.season_number > 0)
@@ -201,7 +208,8 @@ export default function ShowDetail() {
       showPosterPath: show.poster_path,
       showTotalEpisodes: show.number_of_episodes,
       episodes,
-      watchedAt: dateIso,
+      watchedAt: input.watchedAt,
+      watchedAtUnknown: input.unknownDate,
     })
     setWatched((prev) => {
       const next = { ...prev }
@@ -210,7 +218,7 @@ export default function ShowDetail() {
     })
   }
 
-  async function handleMarkSeasonWatched(dateIso: string) {
+  async function handleMarkSeasonWatched(input: { watchedAt: string; unknownDate: boolean }) {
     if (!user || !show || !season) return
     const episodes = season.episodes.map((ep) => ({
       seasonNumber: ep.season_number,
@@ -224,7 +232,8 @@ export default function ShowDetail() {
       showPosterPath: show.poster_path,
       showTotalEpisodes: show.number_of_episodes,
       episodes,
-      watchedAt: dateIso,
+      watchedAt: input.watchedAt,
+      watchedAtUnknown: input.unknownDate,
     })
     setWatched((prev) => {
       const next = { ...prev }
@@ -501,6 +510,9 @@ export default function ShowDetail() {
                       episode={ep}
                       watched={Boolean(watched[watchedKey(ep.season_number, ep.episode_number)])}
                       watchedAt={watched[watchedKey(ep.season_number, ep.episode_number)]?.watched_at ?? null}
+                      watchedAtUnknown={Boolean(
+                        watched[watchedKey(ep.season_number, ep.episode_number)]?.watched_at_unknown,
+                      )}
                       onToggleWatched={() => handleToggleWatched(ep.episode_number, ep.name)}
                     />
                   ))}
@@ -532,10 +544,11 @@ function BulkMarkControl({
 }: {
   label: string
   confirmMessage: string
-  onConfirm: (dateIso: string) => Promise<void>
+  onConfirm: (input: { watchedAt: string; unknownDate: boolean }) => Promise<void>
 }) {
   const [open, setOpen] = useState(false)
   const [date, setDate] = useState(() => new Date().toISOString().slice(0, 10))
+  const [unknownDate, setUnknownDate] = useState(false)
   const [saving, setSaving] = useState(false)
   const today = new Date().toISOString().slice(0, 10)
 
@@ -552,38 +565,53 @@ function BulkMarkControl({
   }
 
   return (
-    <div className="flex flex-wrap items-center gap-1.5">
-      <input
-        type="date"
-        value={date}
-        max={today}
-        onChange={(e) => setDate(e.target.value)}
-        className="rounded-lg border border-white/10 bg-base-900 px-2 py-1 text-xs text-base-200"
-      />
-      <button
-        type="button"
-        disabled={saving}
-        onClick={async () => {
-          if (!window.confirm(confirmMessage)) return
-          setSaving(true)
-          try {
-            await onConfirm(new Date(`${date}T12:00:00`).toISOString())
-            setOpen(false)
-          } finally {
-            setSaving(false)
-          }
-        }}
-        className="rounded-lg bg-accent-500/15 px-2.5 py-1 text-xs font-medium text-accent-300 ring-1 ring-accent-500/40 transition-opacity duration-150 disabled:opacity-60"
-      >
-        {saving ? 'Marking…' : 'Confirm'}
-      </button>
-      <button
-        type="button"
-        onClick={() => setOpen(false)}
-        className="text-xs text-base-500 hover:text-base-300"
-      >
-        Cancel
-      </button>
+    <div className="flex flex-col gap-1.5">
+      <div className="flex flex-wrap items-center gap-1.5">
+        <input
+          type="date"
+          value={date}
+          max={today}
+          disabled={unknownDate}
+          onChange={(e) => setDate(e.target.value)}
+          className="rounded-lg border border-white/10 bg-base-900 px-2 py-1 text-xs text-base-200 disabled:opacity-40"
+        />
+        <button
+          type="button"
+          disabled={saving}
+          onClick={async () => {
+            if (!window.confirm(confirmMessage)) return
+            setSaving(true)
+            try {
+              await onConfirm({
+                watchedAt: unknownDate ? UNKNOWN_WATCHED_AT : new Date(`${date}T12:00:00`).toISOString(),
+                unknownDate,
+              })
+              setOpen(false)
+            } finally {
+              setSaving(false)
+            }
+          }}
+          className="rounded-lg bg-accent-500/15 px-2.5 py-1 text-xs font-medium text-accent-300 ring-1 ring-accent-500/40 transition-opacity duration-150 disabled:opacity-60"
+        >
+          {saving ? 'Marking…' : 'Confirm'}
+        </button>
+        <button
+          type="button"
+          onClick={() => setOpen(false)}
+          className="text-xs text-base-500 hover:text-base-300"
+        >
+          Cancel
+        </button>
+      </div>
+      <label className="flex items-center gap-1.5 text-[11px] text-base-500">
+        <input
+          type="checkbox"
+          checked={unknownDate}
+          onChange={(e) => setUnknownDate(e.target.checked)}
+          className="h-3 w-3 rounded border-white/20 bg-base-900 accent-accent-500"
+        />
+        Don&apos;t remember exactly when — just log it as watched a while ago
+      </label>
     </div>
   )
 }
