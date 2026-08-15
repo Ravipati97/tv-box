@@ -22,6 +22,12 @@ export default function Profile() {
         </div>
         <div className="flex items-center gap-2">
           <Link
+            to="/recap"
+            className="rounded-lg border border-hairline-strong px-3.5 py-2 text-sm text-base-300 transition-colors duration-200 hover:border-accent-500/40 hover:text-accent-400"
+          >
+            Year in review
+          </Link>
+          <Link
             to={`/u/${user?.username}`}
             className="rounded-lg border border-hairline-strong px-3.5 py-2 text-sm text-base-300 transition-colors duration-200 hover:border-accent-500/40 hover:text-accent-400"
           >

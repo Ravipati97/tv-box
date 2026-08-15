@@ -24,6 +24,7 @@ const PublicProfile = lazy(() => import('./pages/PublicProfile'))
 const ShowDiary = lazy(() => import('./pages/ShowDiary'))
 const Compare = lazy(() => import('./pages/Compare'))
 const ListDetail = lazy(() => import('./pages/ListDetail'))
+const Recap = lazy(() => import('./pages/Recap'))
 
 function PageLoader() {
   return (
@@ -162,6 +163,16 @@ function AppShell() {
               <ProtectedRoute>
                 <Page>
                   <ListDetail />
+                </Page>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/recap"
+            element={
+              <ProtectedRoute>
+                <Page>
+                  <Recap />
                 </Page>
               </ProtectedRoute>
             }
