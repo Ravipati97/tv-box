@@ -30,7 +30,11 @@ export async function fetchWatchedForShow(userId: string, showId: number): Promi
   return map
 }
 
-/** Same as fetchWatchedForShow but ordered, for the per-show watch-history view. */
+/** Same as fetchWatchedForShow but ordered, for the per-show watch-history view.
+ * Bulk actions ("mark season/show watched") stamp every row in the batch with
+ * the exact same watched_at, so watched_at alone leaves ties in whatever order
+ * Postgres feels like returning them -- season/episode number (descending)
+ * breaks those ties deterministically instead of the list looking shuffled. */
 export async function fetchWatchedForUserAndShow(
   userId: string,
   showId: number,
@@ -41,6 +45,8 @@ export async function fetchWatchedForUserAndShow(
     .eq('user_id', userId)
     .eq('show_id', showId)
     .order('watched_at', { ascending: false })
+    .order('season_number', { ascending: false })
+    .order('episode_number', { ascending: false })
 
   if (error) throw error
   return (data ?? []) as EpisodeWatched[]
