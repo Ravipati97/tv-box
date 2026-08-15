@@ -51,6 +51,20 @@ function cacheKey(showId: number, region: string): string {
   return `${region}:${showId}`
 }
 
+/**
+ * Drops every cached answer for a show (all regions -- cheap, and simpler
+ * than threading the current region in here). Call this after setting or
+ * clearing a streaming override: the cache above is what every poster badge
+ * (Home, History, Search) reads from, and it has no other way to learn a
+ * manual correction just happened. Without this, the badge shows the old
+ * answer until a full page reload starts a fresh module instance.
+ */
+export function invalidatePlatformCache(showId: number): void {
+  for (const key of platformCache.keys()) {
+    if (key.endsWith(`:${showId}`)) platformCache.delete(key)
+  }
+}
+
 /** Resolves "where to watch" for many shows at once (batched + cached), for
  * grouping a history/activity list by streaming platform. */
 export async function resolveShowPlatforms(

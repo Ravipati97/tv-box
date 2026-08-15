@@ -25,7 +25,7 @@ import {
 } from '../lib/seasonRatings'
 import { bulkMarkWatched, fetchWatchedForShow, markWatched, unmarkWatched, watchedKey } from '../lib/watched'
 import { clearStreamingOverride, fetchStreamingOverride, setStreamingOverride } from '../lib/streamingOverrides'
-import { pickBestFreeProvider } from '../lib/streamingProvider'
+import { invalidatePlatformCache, pickBestFreeProvider } from '../lib/streamingProvider'
 import { useAuth } from '../contexts/AuthContext'
 import type {
   SeasonRatingWithUser,
@@ -278,11 +278,16 @@ export default function ShowDetail() {
 
   async function handleMarkSeasonWatched(input: { watchedAt: string; unknownDate: boolean }) {
     if (!user || !show || !season) return
-    const episodes = season.episodes.map((ep) => ({
-      seasonNumber: ep.season_number,
-      episodeNumber: ep.episode_number,
-      episodeName: ep.name,
-    }))
+    // Skip TMDB's not-yet-aired placeholder episodes (future air_date) -- see
+    // the matching check in EpisodeRow.tsx. Marking these "watched" in bulk
+    // would be the same nonsensical action a single click is now blocked from.
+    const episodes = season.episodes
+      .filter((ep) => !(ep.air_date && new Date(ep.air_date) > new Date()))
+      .map((ep) => ({
+        seasonNumber: ep.season_number,
+        episodeNumber: ep.episode_number,
+        episodeName: ep.name,
+      }))
     const saved = await bulkMarkWatched({
       userId: user.id,
       showId: show.id,
@@ -311,12 +316,16 @@ export default function ShowDetail() {
     })
     setOverride(saved)
     setPickerOpen(false)
+    // The poster badges on Home/History/Search read from a cached answer --
+    // without this they'd keep showing the old provider until a hard reload.
+    invalidatePlatformCache(show.id)
   }
 
   async function handleClearOverride() {
     if (!show) return
     await clearStreamingOverride(show.id)
     setOverride(null)
+    invalidatePlatformCache(show.id)
   }
 
   async function handleRateShow(value: number) {

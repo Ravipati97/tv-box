@@ -29,6 +29,14 @@ export default function EpisodeRow({
   const [saving, setSaving] = useState(false)
   const [expanded, setExpanded] = useState(false)
   const still = stillUrl(episode.still_path)
+  // TMDB lists placeholder rows for episodes that haven't aired yet (no
+  // synopsis, no image, generic "Episode N" title) for shows still airing --
+  // marking one of these "watched" would be nonsensical, and doing it by
+  // accident is exactly the kind of thing that makes a show's progress
+  // look stuck. Only treated as upcoming with a real, known future date --
+  // a missing air_date on an already-released obscure episode shouldn't
+  // get swept up in this.
+  const isUpcoming = Boolean(episode.air_date && new Date(episode.air_date) > new Date())
 
   async function handleToggle() {
     setSaving(true)
@@ -46,7 +54,7 @@ export default function EpisodeRow({
       transition={{ duration: 0.25 }}
       className={`group rounded-xl border border-hairline bg-base-850/60 p-3 transition-colors duration-200 hover:bg-base-800/70 sm:p-4 ${
         watched ? 'ring-1 ring-inset ring-accent-500/20' : ''
-      }`}
+      } ${isUpcoming ? 'opacity-60' : ''}`}
     >
       <div className="flex gap-3 sm:gap-4">
         <button
@@ -95,30 +103,38 @@ export default function EpisodeRow({
           </p>
 
           <div className="mt-2.5 flex flex-wrap items-center gap-x-3 gap-y-1.5 sm:mt-3">
-            <button
-              type="button"
-              onClick={handleToggle}
-              disabled={saving}
-              className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-medium transition-colors duration-200 disabled:opacity-60 ${
-                watched
-                  ? 'border-accent-500/40 bg-accent-500/15 text-accent-300'
-                  : 'border-hairline-strong text-base-400 hover:border-accent-500/40 hover:text-base-200'
-              }`}
-            >
-              <CheckGlyph filled={watched} />
-              {watched
-                ? watchedAtUnknown
-                  ? 'Watched a while ago'
-                  : `Watched${watchedAt ? ` ${formatShortDate(watchedAt)}` : ''}`
-                : 'Mark watched'}
-              {saving && (
-                <span className="ml-0.5 h-3 w-3 animate-spin rounded-full border-2 border-current/30 border-t-current" />
-              )}
-            </button>
-            {/* Fast path above always stamps "now" -- this is the second
-                option for logging an episode watched on some other day,
-                without slowing down the common one-tap case. */}
-            {!watched && <DateMarkControl label="Watched in the past" onConfirm={onMarkWatchedWithDate} />}
+            {isUpcoming ? (
+              <span className="inline-flex items-center gap-1.5 rounded-full border border-hairline-strong px-3 py-1.5 text-xs font-medium text-base-500">
+                Airs {formatShortDate(episode.air_date!)}
+              </span>
+            ) : (
+              <>
+                <button
+                  type="button"
+                  onClick={handleToggle}
+                  disabled={saving}
+                  className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-medium transition-colors duration-200 disabled:opacity-60 ${
+                    watched
+                      ? 'border-accent-500/40 bg-accent-500/15 text-accent-300'
+                      : 'border-hairline-strong text-base-400 hover:border-accent-500/40 hover:text-base-200'
+                  }`}
+                >
+                  <CheckGlyph filled={watched} />
+                  {watched
+                    ? watchedAtUnknown
+                      ? 'Watched a while ago'
+                      : `Watched${watchedAt ? ` ${formatShortDate(watchedAt)}` : ''}`
+                    : 'Mark watched'}
+                  {saving && (
+                    <span className="ml-0.5 h-3 w-3 animate-spin rounded-full border-2 border-current/30 border-t-current" />
+                  )}
+                </button>
+                {/* Fast path above always stamps "now" -- this is the second
+                    option for logging an episode watched on some other day,
+                    without slowing down the common one-tap case. */}
+                {!watched && <DateMarkControl label="Watched in the past" onConfirm={onMarkWatchedWithDate} />}
+              </>
+            )}
           </div>
         </div>
       </div>
