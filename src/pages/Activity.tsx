@@ -63,9 +63,16 @@ export default function Activity() {
     const groups: DayGroup[] = []
     let currentKey = ''
     for (const e of filtered) {
-      const key = dayKey(e.at)
+      // Unknown-date events carry a placeholder timestamp (epoch) purely so
+      // the column can stay NOT NULL -- never format it as a real date.
+      // They already sort last (epoch loses every date comparison), so they
+      // naturally collapse into one trailing group here.
+      const key = e.atUnknown ? 'unknown' : dayKey(e.at)
       if (key !== currentKey) {
-        groups.push({ heading: formatDiaryHeading(e.at), items: [e] })
+        groups.push({
+          heading: e.atUnknown ? 'Watched a while ago' : formatDiaryHeading(e.at),
+          items: [e],
+        })
         currentKey = key
       } else {
         groups[groups.length - 1].items.push(e)
