@@ -6,10 +6,13 @@ import { fetchRecentShowRatings, fetchRecentShowRatingsAllUsers } from '../lib/s
 import { fetchRecentWatched, fetchRecentWatchedAllUsers } from '../lib/watched'
 import { summarizeShowActivity, nowWatching, watchHistory, buildGroupActivity } from '../lib/showActivity'
 import type { GroupActivityEvent } from '../lib/showActivity'
+import { computeSeasonProgress, fetchSeasonBreakdowns } from '../lib/seasonProgress'
+import type { SeasonProgress } from '../lib/seasonProgress'
 import { posterUrl } from '../lib/tmdb'
 import { formatShortDate } from '../lib/date'
 import HistorySection from '../components/HistorySection'
 import ActivityRow from '../components/ActivityRow'
+import SeasonProgressBar from '../components/SeasonProgressBar'
 import type { EpisodeWatched, ShowRating } from '../types'
 
 function greeting(): string {
@@ -76,6 +79,48 @@ export default function Home() {
   const history = useMemo(() => watchHistory(activity), [activity])
   const recentGroupActivity = groupActivity.slice(0, 5)
 
+  // Per-season watched counts for everything in progress -- lets the card
+  // below say "Season 4 · 2/10" instead of a flat, hard-to-parse "10/44".
+  const watchedBySeasonByShow = useMemo(() => {
+    const map = new Map<number, Record<number, number>>()
+    for (const w of watched) {
+      const bucket = map.get(w.show_id) ?? {}
+      bucket[w.season_number] = (bucket[w.season_number] ?? 0) + 1
+      map.set(w.show_id, bucket)
+    }
+    return map
+  }, [watched])
+
+  const [seasonProgress, setSeasonProgress] = useState<Map<number, SeasonProgress>>(new Map())
+  const watchingKey = watching.map((s) => s.showId).join(',')
+
+  useEffect(() => {
+    if (!watchingKey) {
+      setSeasonProgress(new Map())
+      return
+    }
+    let cancelled = false
+    const showIds = watchingKey.split(',').map(Number)
+    fetchSeasonBreakdowns(showIds)
+      .then((breakdowns) => {
+        if (cancelled) return
+        const next = new Map<number, SeasonProgress>()
+        for (const id of showIds) {
+          const seasons = breakdowns.get(id)
+          if (!seasons) continue
+          const progress = computeSeasonProgress(seasons, watchedBySeasonByShow.get(id) ?? {})
+          if (progress) next.set(id, progress)
+        }
+        setSeasonProgress(next)
+      })
+      .catch(() => {
+        // Nice-to-have -- the card below falls back to the flat total.
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [watchingKey, watchedBySeasonByShow])
+
   return (
     <div className="mx-auto max-w-5xl px-4 pb-24 pt-6 sm:px-6 md:pb-10">
       <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="mb-6">
@@ -119,10 +164,10 @@ export default function Home() {
       ) : (
         <div className="grid grid-cols-2 gap-x-4 gap-y-6 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
           {watching.map((s, i) => {
-            const pct =
-              s.totalEpisodes && s.totalEpisodes > 0
-                ? Math.min(100, (s.watchedCount / s.totalEpisodes) * 100)
-                : null
+            const progress = seasonProgress.get(s.showId)
+            const isMultiSeason = Boolean(progress && progress.segments.length > 1)
+            const watchedNum = isMultiSeason ? progress!.currentSeasonWatched : s.watchedCount
+            const totalNum = isMultiSeason ? progress!.currentSeasonTotal : s.totalEpisodes
             return (
               <motion.div
                 key={s.showId}
@@ -148,20 +193,23 @@ export default function Home() {
                   </div>
                   <p className="mt-2 truncate text-sm font-medium text-base-100">{s.showName}</p>
                   <p className="text-xs text-base-400">
-                    {s.watchedCount}
-                    {s.totalEpisodes ? `/${s.totalEpisodes}` : ''} watched
+                    {isMultiSeason && `Season ${progress!.currentSeasonNumber} · `}
+                    {watchedNum}
+                    {totalNum ? `/${totalNum}` : ''}
                     {s.lastWatchedAt
                       ? ` · ${s.lastWatchedAtUnknown ? 'a while ago' : formatShortDate(s.lastWatchedAt)}`
                       : ''}
                   </p>
-                  {pct !== null && (
-                    <div className="mt-1.5 h-1 w-full overflow-hidden rounded-full bg-base-800">
-                      <div
-                        className="h-full rounded-full bg-accent-500 transition-[width] duration-300"
-                        style={{ width: `${pct}%` }}
-                      />
-                    </div>
-                  )}
+                  <div className="mt-1.5">
+                    <SeasonProgressBar
+                      segments={
+                        progress?.segments ??
+                        (s.totalEpisodes
+                          ? [{ seasonNumber: 1, watched: s.watchedCount, total: s.totalEpisodes }]
+                          : [])
+                      }
+                    />
+                  </div>
                 </Link>
               </motion.div>
             )
