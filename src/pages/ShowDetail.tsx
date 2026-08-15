@@ -1,14 +1,20 @@
 import { useEffect, useMemo, useState } from 'react'
-import { useParams } from 'react-router-dom'
+import { useParams, Link } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import SeasonTabs from '../components/SeasonTabs'
 import EpisodeRow from '../components/EpisodeRow'
+import StarRating from '../components/StarRating'
 import { EpisodeRowSkeleton } from '../components/Skeletons'
 import { backdropUrl, getSeasonDetail, getShowDetail, posterUrl, yearFromDate } from '../lib/tmdb'
-import { deleteRating, fetchAllRatingsForShow, ratingKey, splitRatingsByUser, upsertRating } from '../lib/ratings'
-import { fetchReactionsForRatings, groupReactionsByRating, toggleReaction } from '../lib/reactions'
+import { fetchAllShowRatings, upsertShowRating, deleteShowRating } from '../lib/showRatings'
+import { fetchWatchedForShow, markWatched, unmarkWatched, watchedKey } from '../lib/watched'
 import { useAuth } from '../contexts/AuthContext'
-import type { CrowdMap, RatingMap, ReactionMap, RatingReaction, TmdbSeasonDetail, TmdbShowDetail } from '../types'
+import type {
+  ShowRatingWithUser,
+  TmdbSeasonDetail,
+  TmdbShowDetail,
+  WatchedMap,
+} from '../types'
 
 export default function ShowDetail() {
   const { id } = useParams<{ id: string }>()
@@ -18,14 +24,15 @@ export default function ShowDetail() {
   const [show, setShow] = useState<TmdbShowDetail | null>(null)
   const [season, setSeason] = useState<TmdbSeasonDetail | null>(null)
   const [activeSeason, setActiveSeason] = useState<number | null>(null)
-  const [ratings, setRatings] = useState<RatingMap>({})
-  const [crowd, setCrowd] = useState<CrowdMap>({})
-  const [reactions, setReactions] = useState<ReactionMap>({})
+  const [watched, setWatched] = useState<WatchedMap>({})
+  const [showRatings, setShowRatings] = useState<ShowRatingWithUser[]>([])
   const [loadingShow, setLoadingShow] = useState(true)
   const [loadingSeason, setLoadingSeason] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [savingRating, setSavingRating] = useState(false)
+  const [showRatersList, setShowRatersList] = useState(false)
 
-  // Load show detail + everyone's ratings for this show (mine + the crowd's).
+  // Load show detail + my watch progress + everyone's show rating, in parallel.
   useEffect(() => {
     let cancelled = false
     setLoadingShow(true)
@@ -33,21 +40,17 @@ export default function ShowDetail() {
 
     async function load() {
       try {
-        const [showData, allRatings] = await Promise.all([
+        const [showData, watchedMap, ratings] = await Promise.all([
           getShowDetail(showId),
-          fetchAllRatingsForShow(showId),
+          user ? fetchWatchedForShow(user.id, showId) : Promise.resolve({}),
+          fetchAllShowRatings(showId),
         ])
         if (cancelled) return
         setShow(showData)
-        const { mine, crowd: crowdMap } = splitRatingsByUser(allRatings, user?.id ?? '')
-        setRatings(mine)
-        setCrowd(crowdMap)
+        setWatched(watchedMap)
+        setShowRatings(ratings)
         const firstRealSeason = showData.seasons.find((s) => s.season_number > 0) ?? showData.seasons[0]
         setActiveSeason(firstRealSeason ? firstRealSeason.season_number : null)
-
-        // Reactions for every rating on this show, in one follow-up query.
-        const reactionRows = await fetchReactionsForRatings(allRatings.map((r) => r.id))
-        if (!cancelled) setReactions(groupReactionsByRating(reactionRows))
       } catch (err) {
         if (!cancelled) setError(err instanceof Error ? err.message : 'Failed to load show.')
       } finally {
@@ -83,79 +86,76 @@ export default function ShowDetail() {
     }
   }, [showId, activeSeason])
 
-  const seasonAverage = useMemo(() => {
+  const watchedCount = Object.keys(watched).length
+  const totalEpisodes = show?.number_of_episodes ?? null
+
+  const seasonWatchedCount = useMemo(() => {
     if (!season) return null
-    const values = season.episodes
-      .map((ep) => ratings[ratingKey(ep.season_number, ep.episode_number)]?.rating)
-      .filter((v): v is number => typeof v === 'number' && v > 0)
-    if (values.length === 0) return null
-    return values.reduce((a, b) => a + b, 0) / values.length
-  }, [season, ratings])
+    return season.episodes.filter((ep) => watched[watchedKey(ep.season_number, ep.episode_number)]).length
+  }, [season, watched])
 
-  async function handleRate(episodeNumber: number, episodeName: string, value: number) {
+  const myShowRating = useMemo(
+    () => showRatings.find((r) => r.user_id === user?.id) ?? null,
+    [showRatings, user],
+  )
+  const others = useMemo(
+    () => showRatings.filter((r) => r.user_id !== user?.id),
+    [showRatings, user],
+  )
+  const othersAvg =
+    others.length > 0 ? others.reduce((sum, r) => sum + r.rating, 0) / others.length : null
+
+  async function handleToggleWatched(episodeNumber: number, episodeName: string) {
     if (!user || !show || activeSeason === null) return
-    const key = ratingKey(activeSeason, episodeNumber)
+    const key = watchedKey(activeSeason, episodeNumber)
 
-    if (value === 0) {
-      setRatings((prev) => {
+    if (watched[key]) {
+      setWatched((prev) => {
         const next = { ...prev }
         delete next[key]
         return next
       })
-      setCrowd((prev) => ({
-        ...prev,
-        [key]: (prev[key] ?? []).filter((r) => r.user_id !== user.id),
-      }))
-      await deleteRating(user.id, show.id, activeSeason, episodeNumber)
+      await unmarkWatched(user.id, show.id, activeSeason, episodeNumber)
       return
     }
 
-    const saved = await upsertRating({
+    const saved = await markWatched({
       userId: user.id,
       showId: show.id,
       showName: show.name,
       showPosterPath: show.poster_path,
+      showTotalEpisodes: show.number_of_episodes,
       seasonNumber: activeSeason,
       episodeNumber,
       episodeName,
-      rating: value,
     })
-    setRatings((prev) => ({ ...prev, [key]: saved }))
-    setCrowd((prev) => {
-      const existing = (prev[key] ?? []).filter((r) => r.user_id !== user.id)
-      return { ...prev, [key]: [...existing, { ...saved, users: { username: user.username } }] }
-    })
+    setWatched((prev) => ({ ...prev, [key]: saved }))
   }
 
-  async function handleToggleReaction(ratingId: string, emoji: string) {
-    if (!user) return
-
-    // Optimistic update so the tap feels instant.
-    setReactions((prev) => {
-      const existing = prev[ratingId] ?? []
-      const mine = existing.find((r) => r.user_id === user.id)
-      const withoutMine = existing.filter((r) => r.user_id !== user.id)
-      if (mine && mine.emoji === emoji) {
-        return { ...prev, [ratingId]: withoutMine }
-      }
-      const optimistic: RatingReaction = {
-        id: mine?.id ?? `pending-${ratingId}-${user.id}`,
-        rating_id: ratingId,
-        user_id: user.id,
-        emoji,
-        created_at: new Date().toISOString(),
-      }
-      return { ...prev, [ratingId]: [...withoutMine, optimistic] }
-    })
-
+  async function handleRateShow(value: number) {
+    if (!user || !show) return
+    setSavingRating(true)
     try {
-      const result = await toggleReaction(ratingId, user.id, emoji)
-      setReactions((prev) => {
-        const withoutMine = (prev[ratingId] ?? []).filter((r) => r.user_id !== user.id)
-        return { ...prev, [ratingId]: result ? [...withoutMine, result] : withoutMine }
+      if (value === 0) {
+        setShowRatings((prev) => prev.filter((r) => r.user_id !== user.id))
+        await deleteShowRating(user.id, show.id)
+        return
+      }
+      const saved = await upsertShowRating({
+        userId: user.id,
+        showId: show.id,
+        showName: show.name,
+        showPosterPath: show.poster_path,
+        rating: value,
       })
+      setShowRatings((prev) => [
+        ...prev.filter((r) => r.user_id !== user.id),
+        { ...saved, users: { username: user.username } },
+      ])
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to save reaction.')
+      setError(err instanceof Error ? err.message : 'Failed to save rating.')
+    } finally {
+      setSavingRating(false)
     }
   }
 
@@ -222,6 +222,87 @@ export default function ShowDetail() {
           </motion.div>
         </div>
 
+        {/* Your rating + the crowd's */}
+        {show && !loadingShow && (
+          <div className="mt-5">
+            <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+              <StarRating value={myShowRating?.rating ?? 0} onChange={handleRateShow} size="lg" />
+              {savingRating && (
+                <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-base-600 border-t-accent-400" />
+              )}
+              {showRatings.length > 0 && (
+                <button
+                  type="button"
+                  onClick={() => setShowRatersList((v) => !v)}
+                  className="flex items-center gap-1 text-xs text-base-400 hover:text-base-200"
+                >
+                  {othersAvg !== null ? (
+                    <>
+                      <StarGlyph />
+                      {othersAvg.toFixed(1)}
+                      <span className="text-base-500">
+                        ({others.length} {others.length === 1 ? 'other rating' : 'other ratings'})
+                      </span>
+                    </>
+                  ) : (
+                    <span className="text-base-500">You&apos;re the first to rate this</span>
+                  )}
+                </button>
+              )}
+            </div>
+
+            {showRatersList && showRatings.length > 0 && (
+              <motion.ul
+                initial={{ opacity: 0, y: -4 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="mt-2.5 max-w-xs space-y-1.5 border-t border-white/5 pt-2.5"
+              >
+                {showRatings
+                  .slice()
+                  .sort((a, b) => b.rating - a.rating)
+                  .map((r) => (
+                    <li key={r.id} className="flex items-center justify-between text-xs">
+                      {r.user_id === user?.id ? (
+                        <span className="text-base-300">You</span>
+                      ) : (
+                        <Link
+                          to={`/u/${r.users?.username ?? ''}`}
+                          className="text-base-300 hover:text-accent-400"
+                        >
+                          @{r.users?.username ?? 'unknown'}
+                        </Link>
+                      )}
+                      <span className="flex items-center gap-1 text-star">
+                        {r.rating.toFixed(1)}
+                        <StarGlyph />
+                      </span>
+                    </li>
+                  ))}
+              </motion.ul>
+            )}
+          </div>
+        )}
+
+        {/* Watch progress */}
+        {show && totalEpisodes !== null && totalEpisodes > 0 && (
+          <div className="mt-4 max-w-xs">
+            <div className="mb-1.5 flex items-center justify-between text-xs text-base-400">
+              <span>
+                {watchedCount} / {totalEpisodes} episodes watched
+              </span>
+              {watchedCount >= totalEpisodes && (
+                <span className="text-accent-400">Finished</span>
+              )}
+            </div>
+            <div className="h-1.5 w-full overflow-hidden rounded-full bg-base-800">
+              <div
+                className="h-full rounded-full bg-accent-500 transition-[width] duration-300"
+                style={{ width: `${Math.min(100, (watchedCount / totalEpisodes) * 100)}%` }}
+              />
+            </div>
+          </div>
+        )}
+
         {show?.overview && (
           <p className="mt-5 max-w-3xl text-sm leading-relaxed text-base-300">{show.overview}</p>
         )}
@@ -244,10 +325,9 @@ export default function ShowDetail() {
           <div className="mt-8">
             <div className="mb-4 flex items-center justify-between">
               <SeasonTabs seasons={show.seasons} active={activeSeason} onSelect={setActiveSeason} />
-              {seasonAverage !== null && (
-                <div className="hidden shrink-0 items-center gap-1.5 text-sm text-star sm:flex">
-                  <StarGlyph />
-                  {seasonAverage.toFixed(1)}
+              {season && seasonWatchedCount !== null && (
+                <div className="hidden shrink-0 text-xs text-base-400 sm:block">
+                  {seasonWatchedCount}/{season.episodes.length} watched
                 </div>
               )}
             </div>
@@ -259,12 +339,9 @@ export default function ShowDetail() {
                     <EpisodeRow
                       key={ep.id}
                       episode={ep}
-                      rating={ratings[ratingKey(ep.season_number, ep.episode_number)]?.rating ?? 0}
-                      crowd={crowd[ratingKey(ep.season_number, ep.episode_number)] ?? []}
-                      reactionsByRatingId={reactions}
-                      myUserId={user?.id ?? ''}
-                      onRate={(value) => handleRate(ep.episode_number, ep.name, value)}
-                      onToggleReaction={handleToggleReaction}
+                      watched={Boolean(watched[watchedKey(ep.season_number, ep.episode_number)])}
+                      watchedAt={watched[watchedKey(ep.season_number, ep.episode_number)]?.watched_at ?? null}
+                      onToggleWatched={() => handleToggleWatched(ep.episode_number, ep.name)}
                     />
                   ))}
             </div>

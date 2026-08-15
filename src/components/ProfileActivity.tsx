@@ -2,10 +2,11 @@ import { useEffect, useMemo, useState } from 'react'
 import type { ReactNode } from 'react'
 import { Link } from 'react-router-dom'
 import { motion } from 'framer-motion'
-import { fetchRecentRatings } from '../lib/ratings'
+import { fetchRecentShowRatings } from '../lib/showRatings'
+import { fetchRecentWatched } from '../lib/watched'
 import { posterUrl } from '../lib/tmdb'
 import { dayKey, formatDiaryHeading } from '../lib/date'
-import type { EpisodeRating } from '../types'
+import type { EpisodeWatched, ShowRating } from '../types'
 
 interface ProfileActivityProps {
   userId: string
@@ -14,23 +15,15 @@ interface ProfileActivityProps {
 
 interface DiaryGroup {
   heading: string
-  items: EpisodeRating[]
-}
-
-interface ShowSummary {
-  showId: number
-  showName: string
-  showPosterPath: string | null
-  count: number
-  avg: number
-  mostRecent: string
+  items: ShowRating[]
 }
 
 type Tab = 'diary' | 'shows'
 
 export default function ProfileActivity({ userId, username }: ProfileActivityProps) {
   const [tab, setTab] = useState<Tab>('diary')
-  const [ratings, setRatings] = useState<EpisodeRating[]>([])
+  const [ratings, setRatings] = useState<ShowRating[]>([])
+  const [watched, setWatched] = useState<EpisodeWatched[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
@@ -38,14 +31,15 @@ export default function ProfileActivity({ userId, username }: ProfileActivityPro
     let cancelled = false
     setLoading(true)
     setError(null)
-    // High cap, not a "recent 60" -- both the Diary and Shows tabs need the
-    // full history, not just the latest handful.
-    fetchRecentRatings(userId, 2000)
-      .then((data) => {
-        if (!cancelled) setRatings(data)
+    Promise.all([fetchRecentShowRatings(userId, 2000), fetchRecentWatched(userId, 2000)])
+      .then(([ratingRows, watchedRows]) => {
+        if (!cancelled) {
+          setRatings(ratingRows)
+          setWatched(watchedRows)
+        }
       })
       .catch((err) => {
-        if (!cancelled) setError(err instanceof Error ? err.message : 'Failed to load ratings.')
+        if (!cancelled) setError(err instanceof Error ? err.message : 'Failed to load activity.')
       })
       .finally(() => {
         if (!cancelled) setLoading(false)
@@ -56,11 +50,10 @@ export default function ProfileActivity({ userId, username }: ProfileActivityPro
   }, [userId])
 
   const stats = useMemo(() => {
-    const totalEpisodes = ratings.length
-    const showIds = new Set(ratings.map((r) => r.show_id))
-    const avg = totalEpisodes === 0 ? null : ratings.reduce((sum, r) => sum + r.rating, 0) / totalEpisodes
-    return { totalEpisodes, totalShows: showIds.size, avg }
-  }, [ratings])
+    const totalShows = ratings.length
+    const avg = totalShows === 0 ? null : ratings.reduce((sum, r) => sum + r.rating, 0) / totalShows
+    return { totalShows, episodesWatched: watched.length, avg }
+  }, [ratings, watched])
 
   // Ratings already arrive sorted newest-first, so grouping is just "start a
   // new bucket whenever the calendar day changes".
@@ -79,31 +72,11 @@ export default function ProfileActivity({ userId, username }: ProfileActivityPro
     return groups
   }, [ratings])
 
-  const shows = useMemo<ShowSummary[]>(() => {
-    const byShow = new Map<number, EpisodeRating[]>()
-    for (const r of ratings) {
-      const list = byShow.get(r.show_id)
-      if (list) list.push(r)
-      else byShow.set(r.show_id, [r])
-    }
-    const summaries = Array.from(byShow.values()).map((items): ShowSummary => ({
-      showId: items[0].show_id,
-      showName: items[0].show_name,
-      showPosterPath: items[0].show_poster_path,
-      count: items.length,
-      avg: items.reduce((sum, r) => sum + r.rating, 0) / items.length,
-      // items are already newest-first within the overall sort, so [0] is the most recent
-      mostRecent: items[0].rated_at,
-    }))
-    summaries.sort((a, b) => (a.mostRecent < b.mostRecent ? 1 : -1))
-    return summaries
-  }, [ratings])
-
   return (
     <div>
       <div className="mb-8 grid grid-cols-3 gap-3">
-        <StatCard label="Episodes rated" value={stats.totalEpisodes} />
-        <StatCard label="Shows" value={stats.totalShows} />
+        <StatCard label="Shows rated" value={stats.totalShows} />
+        <StatCard label="Episodes watched" value={stats.episodesWatched} />
         <StatCard label="Avg rating" value={stats.avg !== null ? stats.avg.toFixed(1) : '—'} />
       </div>
 
@@ -165,10 +138,7 @@ export default function ProfileActivity({ userId, username }: ProfileActivityPro
                       </div>
                       <div className="min-w-0 flex-1">
                         <p className="truncate text-sm font-medium text-base-100">{r.show_name}</p>
-                        <p className="text-xs text-base-400">
-                          S{r.season_number} · E{r.episode_number}
-                          {r.episode_name ? ` — ${r.episode_name}` : ''}
-                        </p>
+                        <p className="text-xs text-base-400">Rated</p>
                       </div>
                       <div className="flex shrink-0 items-center gap-1 text-sm font-semibold text-star">
                         {r.rating.toFixed(1)}
@@ -183,38 +153,35 @@ export default function ProfileActivity({ userId, username }: ProfileActivityPro
         </div>
       ) : (
         <div className="grid grid-cols-2 gap-x-4 gap-y-6 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
-          {shows.map((s, i) => (
+          {ratings.map((r, i) => (
             <motion.div
-              key={s.showId}
+              key={r.id}
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.3, delay: Math.min(i, 12) * 0.02 }}
             >
-              <Link to={`/u/${username}/shows/${s.showId}`} className="group block">
+              <Link to={`/u/${username}/shows/${r.show_id}`} className="group block">
                 <div className="relative aspect-[2/3] overflow-hidden rounded-xl bg-base-800 ring-1 ring-white/5 transition-shadow duration-300 group-hover:shadow-[0_8px_30px_rgba(139,92,246,0.25)]">
-                  {s.showPosterPath ? (
+                  {r.show_poster_path ? (
                     <img
-                      src={posterUrl(s.showPosterPath) ?? undefined}
-                      alt={s.showName}
+                      src={posterUrl(r.show_poster_path) ?? undefined}
+                      alt={r.show_name}
                       loading="lazy"
                       className="h-full w-full object-cover transition-transform duration-500 ease-out group-hover:scale-[1.06]"
                     />
                   ) : (
                     <div className="flex h-full w-full items-center justify-center p-3 text-center text-xs text-base-400">
-                      {s.showName}
+                      {r.show_name}
                     </div>
                   )}
                   <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/85 to-transparent px-2 pb-1.5 pt-4">
                     <div className="flex items-center gap-1 text-[11px] font-semibold text-star">
-                      {s.avg.toFixed(1)}
+                      {r.rating.toFixed(1)}
                       <StarGlyph />
                     </div>
                   </div>
                 </div>
-                <p className="mt-2 truncate text-sm font-medium text-base-100">{s.showName}</p>
-                <p className="text-xs text-base-400">
-                  {s.count} {s.count === 1 ? 'episode' : 'episodes'}
-                </p>
+                <p className="mt-2 truncate text-sm font-medium text-base-100">{r.show_name}</p>
               </Link>
             </motion.div>
           ))}

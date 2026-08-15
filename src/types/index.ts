@@ -59,40 +59,36 @@ export interface AppUser {
   created_at: string
 }
 
-export interface EpisodeRating {
+/** One person's single rating for an entire show (replaces per-episode rating). */
+export interface ShowRating {
   id: string
   user_id: string
   show_id: number
   show_name: string
   show_poster_path: string | null
-  season_number: number
-  episode_number: number
-  episode_name: string | null
   rating: number
   rated_at: string
 }
 
-/** Keyed lookup: "season-episode" -> rating value */
-export type RatingMap = Record<string, EpisodeRating>
-
-/** An episode_ratings row joined with the rater's username (crowd view). */
-export interface EpisodeRatingWithUser extends EpisodeRating {
+/** A show_ratings row joined with the rater's username (crowd view). */
+export interface ShowRatingWithUser extends ShowRating {
   users: { username: string } | null
 }
 
-/** Keyed lookup: "season-episode" -> every rating (any user) for that episode */
-export type CrowdMap = Record<string, EpisodeRatingWithUser[]>
-
-export const REACTION_EMOJI = ['🔥', '😂', '😭', '💀'] as const
-export type ReactionEmoji = (typeof REACTION_EMOJI)[number]
-
-export interface RatingReaction {
+/** One episode a person has marked watched. Presence = watched; no value/score. */
+export interface EpisodeWatched {
   id: string
-  rating_id: string
   user_id: string
-  emoji: string
-  created_at: string
+  show_id: number
+  show_name: string
+  show_poster_path: string | null
+  /** Snapshot of the show's total episode count as of this watch, for progress badges. */
+  show_total_episodes: number | null
+  season_number: number
+  episode_number: number
+  episode_name: string | null
+  watched_at: string
 }
 
-/** Keyed lookup: episode_ratings.id -> every reaction on that rating */
-export type ReactionMap = Record<string, RatingReaction[]>
+/** Keyed lookup: "season-episode" -> watched row, for one user's progress on one show. */
+export type WatchedMap = Record<string, EpisodeWatched>

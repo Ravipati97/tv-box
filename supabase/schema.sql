@@ -75,41 +75,103 @@ create policy "Anyone can delete ratings"
   on public.episode_ratings for delete
   using (true);
 
--- One quick emoji reaction per person per rating (e.g. react to a friend's
--- 5-star Severance rating with 🔥). Re-reacting with the same emoji removes
--- it; reacting with a different emoji swaps it -- enforced in the app, not
--- the database, so the unique constraint just caps it at one row per pair.
-create table if not exists public.rating_reactions (
-  id uuid primary key default gen_random_uuid(),
-  rating_id uuid not null references public.episode_ratings(id) on delete cascade,
-  user_id uuid not null references public.users(id) on delete cascade,
-  emoji text not null,
-  created_at timestamptz not null default now(),
+-- Reactions on episode ratings were removed (episode-level rating/social was
+-- too granular in practice -- see show_ratings below). Drops cleanly since
+-- nothing reads or writes it anymore.
+drop table if exists public.rating_reactions cascade;
 
-  unique (rating_id, user_id)
+-- Episode-level ratings are no longer collected (superseded by show_ratings
+-- below) -- this table is intentionally left in place, untouched, so nobody
+-- loses their existing episode-rating history. The app no longer reads or
+-- writes it.
+
+-- One rating per person per show (5-star scale, half-star precision). This
+-- replaced episode-level rating: rating every episode individually turned
+-- out to be more friction than it was worth for most people.
+create table if not exists public.show_ratings (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references public.users(id) on delete cascade,
+
+  show_id integer not null,
+  show_name text not null,
+  show_poster_path text,
+
+  rating numeric(2,1) not null check (rating >= 0.5 and rating <= 5),
+  rated_at timestamptz not null default now(),
+
+  unique (user_id, show_id)
 );
 
-create index if not exists rating_reactions_rating_id_idx on public.rating_reactions (rating_id);
+create index if not exists show_ratings_user_id_idx on public.show_ratings (user_id);
+create index if not exists show_ratings_rated_at_idx on public.show_ratings (user_id, rated_at desc);
 
-alter table public.rating_reactions enable row level security;
+alter table public.show_ratings enable row level security;
 
-drop policy if exists "Anyone can read reactions" on public.rating_reactions;
-create policy "Anyone can read reactions"
-  on public.rating_reactions for select
+drop policy if exists "Anyone can read show ratings" on public.show_ratings;
+create policy "Anyone can read show ratings"
+  on public.show_ratings for select
   using (true);
 
-drop policy if exists "Anyone can insert reactions" on public.rating_reactions;
-create policy "Anyone can insert reactions"
-  on public.rating_reactions for insert
+drop policy if exists "Anyone can insert show ratings" on public.show_ratings;
+create policy "Anyone can insert show ratings"
+  on public.show_ratings for insert
   with check (true);
 
-drop policy if exists "Anyone can update reactions" on public.rating_reactions;
-create policy "Anyone can update reactions"
-  on public.rating_reactions for update
+drop policy if exists "Anyone can update show ratings" on public.show_ratings;
+create policy "Anyone can update show ratings"
+  on public.show_ratings for update
   using (true)
   with check (true);
 
-drop policy if exists "Anyone can delete reactions" on public.rating_reactions;
-create policy "Anyone can delete reactions"
-  on public.rating_reactions for delete
+drop policy if exists "Anyone can delete show ratings" on public.show_ratings;
+create policy "Anyone can delete show ratings"
+  on public.show_ratings for delete
+  using (true);
+
+-- One row per episode a person has marked watched -- powers per-show "12/24
+-- watched" progress and (soon) a Now Watching home view. show_total_episodes
+-- is a denormalized snapshot of TMDB's episode count at the time of the most
+-- recent watch, so progress badges elsewhere don't need an extra TMDB call.
+create table if not exists public.episode_watched (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references public.users(id) on delete cascade,
+
+  show_id integer not null,
+  show_name text not null,
+  show_poster_path text,
+  show_total_episodes integer,
+  season_number integer not null,
+  episode_number integer not null,
+  episode_name text,
+
+  watched_at timestamptz not null default now(),
+
+  unique (user_id, show_id, season_number, episode_number)
+);
+
+create index if not exists episode_watched_user_id_idx on public.episode_watched (user_id);
+create index if not exists episode_watched_user_show_idx on public.episode_watched (user_id, show_id);
+create index if not exists episode_watched_watched_at_idx on public.episode_watched (user_id, watched_at desc);
+
+alter table public.episode_watched enable row level security;
+
+drop policy if exists "Anyone can read watched episodes" on public.episode_watched;
+create policy "Anyone can read watched episodes"
+  on public.episode_watched for select
+  using (true);
+
+drop policy if exists "Anyone can insert watched episodes" on public.episode_watched;
+create policy "Anyone can insert watched episodes"
+  on public.episode_watched for insert
+  with check (true);
+
+drop policy if exists "Anyone can update watched episodes" on public.episode_watched;
+create policy "Anyone can update watched episodes"
+  on public.episode_watched for update
+  using (true)
+  with check (true);
+
+drop policy if exists "Anyone can delete watched episodes" on public.episode_watched;
+create policy "Anyone can delete watched episodes"
+  on public.episode_watched for delete
   using (true);

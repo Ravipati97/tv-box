@@ -2,11 +2,12 @@ import { useEffect, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import { useAuth } from '../contexts/AuthContext'
-import { fetchRatingsForUserAndShow } from '../lib/ratings'
+import { fetchShowRating } from '../lib/showRatings'
+import { fetchWatchedForUserAndShow } from '../lib/watched'
 import { fetchUserByUsername } from '../lib/users'
 import { posterUrl } from '../lib/tmdb'
 import { formatShortDate } from '../lib/date'
-import type { AppUser, EpisodeRating } from '../types'
+import type { AppUser, EpisodeWatched, ShowRating } from '../types'
 
 export default function ShowDiary() {
   const { username, showId } = useParams<{ username: string; showId: string }>()
@@ -14,7 +15,8 @@ export default function ShowDiary() {
   const showIdNum = Number(showId)
 
   const [profile, setProfile] = useState<AppUser | null | undefined>(undefined)
-  const [ratings, setRatings] = useState<EpisodeRating[]>([])
+  const [rating, setRating] = useState<ShowRating | null>(null)
+  const [watched, setWatched] = useState<EpisodeWatched[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
@@ -29,12 +31,18 @@ export default function ShowDiary() {
         if (cancelled) return
         setProfile(found)
         if (found) {
-          const data = await fetchRatingsForUserAndShow(found.id, showIdNum)
-          if (!cancelled) setRatings(data)
+          const [ratingRow, watchedRows] = await Promise.all([
+            fetchShowRating(found.id, showIdNum),
+            fetchWatchedForUserAndShow(found.id, showIdNum),
+          ])
+          if (!cancelled) {
+            setRating(ratingRow)
+            setWatched(watchedRows)
+          }
         }
       })
       .catch((err) => {
-        if (!cancelled) setError(err instanceof Error ? err.message : 'Failed to load ratings.')
+        if (!cancelled) setError(err instanceof Error ? err.message : 'Failed to load this show.')
       })
       .finally(() => {
         if (!cancelled) setLoading(false)
@@ -57,9 +65,9 @@ export default function ShowDiary() {
   }
 
   const isMe = me?.username === username
-  const first = ratings[0]
-  const avg =
-    ratings.length > 0 ? ratings.reduce((sum, r) => sum + r.rating, 0) / ratings.length : null
+  const showName = rating?.show_name ?? watched[0]?.show_name
+  const posterPath = rating?.show_poster_path ?? watched[0]?.show_poster_path
+  const hasNothing = !loading && !rating && watched.length === 0
 
   return (
     <div className="mx-auto max-w-3xl px-4 pb-24 pt-6 sm:px-6 md:pb-10">
@@ -80,28 +88,38 @@ export default function ShowDiary() {
             </div>
           </div>
         </div>
-      ) : ratings.length === 0 ? (
+      ) : hasNothing ? (
         <p className="mt-10 text-center text-sm text-base-500">
-          {error ?? 'No ratings for this show yet.'}
+          {error ?? 'No activity for this show yet.'}
         </p>
       ) : (
         <>
           <div className="mb-8 flex items-center gap-4">
             <div className="w-16 shrink-0 overflow-hidden rounded-lg ring-1 ring-white/10">
-              {first.show_poster_path ? (
-                <img src={posterUrl(first.show_poster_path) ?? undefined} alt="" className="w-full" />
+              {posterPath ? (
+                <img src={posterUrl(posterPath) ?? undefined} alt="" className="w-full" />
               ) : (
                 <div className="aspect-[2/3] w-full bg-base-800" />
               )}
             </div>
             <div className="min-w-0">
               <h1 className="font-display text-lg font-semibold text-base-100 sm:text-xl">
-                {first.show_name}
+                {showName}
               </h1>
-              <p className="text-xs text-base-400">
-                {isMe ? 'You' : `@${username}`} rated {ratings.length}{' '}
-                {ratings.length === 1 ? 'episode' : 'episodes'}
-                {avg !== null ? ` · ${avg.toFixed(1)} avg` : ''}
+              <p className="flex items-center gap-2 text-xs text-base-400">
+                {rating ? (
+                  <span className="flex items-center gap-1 text-star">
+                    {rating.rating.toFixed(1)}
+                    <StarGlyph />
+                  </span>
+                ) : (
+                  <span>{isMe ? "You haven't" : "Hasn't"} rated this yet</span>
+                )}
+                {watched.length > 0 && (
+                  <span>
+                    · {watched.length} {watched.length === 1 ? 'episode' : 'episodes'} watched
+                  </span>
+                )}
               </p>
               <Link
                 to={`/show/${showIdNum}`}
@@ -112,32 +130,32 @@ export default function ShowDiary() {
             </div>
           </div>
 
-          <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-base-400">
-            Rated, most recent first
-          </h2>
-          <ul className="space-y-2">
-            {ratings.map((r, i) => (
-              <motion.li
-                key={r.id}
-                initial={{ opacity: 0, y: 6 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.25, delay: Math.min(i, 10) * 0.02 }}
-                className="flex items-center justify-between rounded-xl border border-white/5 bg-base-850/60 p-3"
-              >
-                <div className="min-w-0">
-                  <p className="truncate text-sm font-medium text-base-100">
-                    S{r.season_number} · E{r.episode_number}
-                    {r.episode_name ? ` — ${r.episode_name}` : ''}
-                  </p>
-                  <p className="text-xs text-base-500">{formatShortDate(r.rated_at)}</p>
-                </div>
-                <div className="flex shrink-0 items-center gap-1 text-sm font-semibold text-star">
-                  {r.rating.toFixed(1)}
-                  <StarGlyph />
-                </div>
-              </motion.li>
-            ))}
-          </ul>
+          {watched.length > 0 && (
+            <>
+              <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-base-400">
+                Watched, most recent first
+              </h2>
+              <ul className="space-y-2">
+                {watched.map((w, i) => (
+                  <motion.li
+                    key={w.id}
+                    initial={{ opacity: 0, y: 6 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ duration: 0.25, delay: Math.min(i, 10) * 0.02 }}
+                    className="flex items-center justify-between rounded-xl border border-white/5 bg-base-850/60 p-3"
+                  >
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-medium text-base-100">
+                        S{w.season_number} · E{w.episode_number}
+                        {w.episode_name ? ` — ${w.episode_name}` : ''}
+                      </p>
+                      <p className="text-xs text-base-500">{formatShortDate(w.watched_at)}</p>
+                    </div>
+                  </motion.li>
+                ))}
+              </ul>
+            </>
+          )}
         </>
       )}
     </div>

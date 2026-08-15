@@ -2,34 +2,26 @@ import { useEffect, useMemo, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import { useAuth } from '../contexts/AuthContext'
-import { fetchRecentRatings } from '../lib/ratings'
+import { fetchRecentShowRatings } from '../lib/showRatings'
 import { fetchUserByUsername } from '../lib/users'
 import { posterUrl } from '../lib/tmdb'
-import type { AppUser, EpisodeRating } from '../types'
+import type { AppUser, ShowRating } from '../types'
 
-interface SharedEpisode {
-  key: string
+interface SharedShow {
   showId: number
   showName: string
   showPosterPath: string | null
-  seasonNumber: number
-  episodeNumber: number
-  episodeName: string | null
   mine: number
   theirs: number
   diff: number
-}
-
-function episodeKey(r: EpisodeRating): string {
-  return `${r.show_id}-${r.season_number}-${r.episode_number}`
 }
 
 export default function Compare() {
   const { username } = useParams<{ username: string }>()
   const { user: me } = useAuth()
   const [them, setThem] = useState<AppUser | null | undefined>(undefined) // undefined = loading
-  const [myRatings, setMyRatings] = useState<EpisodeRating[]>([])
-  const [theirRatings, setTheirRatings] = useState<EpisodeRating[]>([])
+  const [myRatings, setMyRatings] = useState<ShowRating[]>([])
+  const [theirRatings, setTheirRatings] = useState<ShowRating[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
@@ -45,8 +37,8 @@ export default function Compare() {
         setThem(found)
         if (found) {
           const [mine, theirs] = await Promise.all([
-            fetchRecentRatings(me.id, 5000),
-            fetchRecentRatings(found.id, 5000),
+            fetchRecentShowRatings(me.id, 5000),
+            fetchRecentShowRatings(found.id, 5000),
           ])
           if (!cancelled) {
             setMyRatings(mine)
@@ -66,21 +58,17 @@ export default function Compare() {
     }
   }, [username, me])
 
-  const { shared, matchPercent, sharedShowCount } = useMemo(() => {
-    const theirMap = new Map(theirRatings.map((r) => [episodeKey(r), r]))
-    const rows: SharedEpisode[] = []
+  const { shared, matchPercent } = useMemo(() => {
+    const theirMap = new Map(theirRatings.map((r) => [r.show_id, r]))
+    const rows: SharedShow[] = []
     for (const mine of myRatings) {
-      const theirs = theirMap.get(episodeKey(mine))
+      const theirs = theirMap.get(mine.show_id)
       if (!theirs) continue
       const diff = Math.abs(mine.rating - theirs.rating)
       rows.push({
-        key: episodeKey(mine),
         showId: mine.show_id,
         showName: mine.show_name,
         showPosterPath: mine.show_poster_path,
-        seasonNumber: mine.season_number,
-        episodeNumber: mine.episode_number,
-        episodeName: mine.episode_name,
         mine: mine.rating,
         theirs: theirs.rating,
         diff,
@@ -95,11 +83,7 @@ export default function Compare() {
             (rows.reduce((sum, r) => sum + (1 - Math.min(r.diff / 4.5, 1)), 0) / rows.length) * 100,
           )
 
-    return {
-      shared: rows,
-      matchPercent: match,
-      sharedShowCount: new Set(rows.map((r) => r.showId)).size,
-    }
+    return { shared: rows, matchPercent: match }
   }, [myRatings, theirRatings])
 
   if (them === null) {
@@ -133,7 +117,7 @@ export default function Compare() {
       >
         You vs @{username}
       </motion.h1>
-      <p className="mb-6 text-sm text-base-500">How your ratings stack up on shows you&apos;ve both watched.</p>
+      <p className="mb-6 text-sm text-base-500">How your ratings stack up on shows you&apos;ve both rated.</p>
 
       {error && <p className="mb-4 text-sm text-red-400">{error}</p>}
 
@@ -145,14 +129,13 @@ export default function Compare() {
         </div>
       ) : shared.length === 0 ? (
         <p className="mt-10 text-center text-sm text-base-500">
-          No overlap yet — you haven&apos;t rated any of the same episodes.
+          No overlap yet — you haven&apos;t rated any of the same shows.
         </p>
       ) : (
         <>
-          <div className="mb-8 grid grid-cols-3 gap-3">
+          <div className="mb-8 grid grid-cols-2 gap-3">
             <StatCard label="Taste match" value={matchPercent !== null ? `${matchPercent}%` : '—'} />
-            <StatCard label="Shows in common" value={sharedShowCount} />
-            <StatCard label="Episodes in common" value={shared.length} />
+            <StatCard label="Shows in common" value={shared.length} />
           </div>
 
           <h2 className="mb-4 text-sm font-semibold uppercase tracking-wide text-base-400">
@@ -161,7 +144,7 @@ export default function Compare() {
           <ul className="space-y-2">
             {shared.map((r, i) => (
               <motion.li
-                key={r.key}
+                key={r.showId}
                 initial={{ opacity: 0, y: 6 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.25, delay: Math.min(i, 10) * 0.02 }}
@@ -181,10 +164,6 @@ export default function Compare() {
                   </div>
                   <div className="min-w-0 flex-1">
                     <p className="truncate text-sm font-medium text-base-100">{r.showName}</p>
-                    <p className="text-xs text-base-400">
-                      S{r.seasonNumber} · E{r.episodeNumber}
-                      {r.episodeName ? ` — ${r.episodeName}` : ''}
-                    </p>
                   </div>
                   <div className="flex shrink-0 items-center gap-2 text-xs">
                     <span className="rounded-md bg-white/5 px-1.5 py-1 text-base-200">
