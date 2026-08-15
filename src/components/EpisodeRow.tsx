@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { motion } from 'framer-motion'
 import { stillUrl } from '../lib/tmdb'
 import { formatShortDate } from '../lib/date'
+import DateMarkControl from './DateMarkControl'
 import type { TmdbEpisode } from '../types'
 
 interface EpisodeRowProps {
@@ -9,7 +10,12 @@ interface EpisodeRowProps {
   watched: boolean
   watchedAt: string | null
   watchedAtUnknown: boolean
+  /** One click, always "today" -- the fast path for the common case of
+   * marking an episode right after watching it. */
   onToggleWatched: () => Promise<void>
+  /** The slower path: pick a specific date (or "don't remember"), for
+   * logging episodes watched before today one at a time. */
+  onMarkWatchedWithDate: (input: { watchedAt: string; unknownDate: boolean }) => Promise<void>
 }
 
 export default function EpisodeRow({
@@ -18,6 +24,7 @@ export default function EpisodeRow({
   watchedAt,
   watchedAtUnknown,
   onToggleWatched,
+  onMarkWatchedWithDate,
 }: EpisodeRowProps) {
   const [saving, setSaving] = useState(false)
   const [expanded, setExpanded] = useState(false)
@@ -87,7 +94,7 @@ export default function EpisodeRow({
             {episode.overview || 'No synopsis available.'}
           </p>
 
-          <div className="mt-2.5 sm:mt-3">
+          <div className="mt-2.5 flex flex-wrap items-center gap-x-3 gap-y-1.5 sm:mt-3">
             <button
               type="button"
               onClick={handleToggle}
@@ -108,6 +115,10 @@ export default function EpisodeRow({
                 <span className="ml-0.5 h-3 w-3 animate-spin rounded-full border-2 border-current/30 border-t-current" />
               )}
             </button>
+            {/* Fast path above always stamps "now" -- this is the second
+                option for logging an episode watched on some other day,
+                without slowing down the common one-tap case. */}
+            {!watched && <DateMarkControl label="Watched in the past" onConfirm={onMarkWatchedWithDate} />}
           </div>
         </div>
       </div>

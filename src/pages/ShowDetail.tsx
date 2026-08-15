@@ -4,6 +4,7 @@ import { motion } from 'framer-motion'
 import SeasonTabs from '../components/SeasonTabs'
 import EpisodeRow from '../components/EpisodeRow'
 import StarRating from '../components/StarRating'
+import DateMarkControl from '../components/DateMarkControl'
 import { EpisodeRowSkeleton } from '../components/Skeletons'
 import {
   backdropUrl,
@@ -17,14 +18,7 @@ import {
   yearFromDate,
 } from '../lib/tmdb'
 import { fetchAllShowRatings, upsertShowRating, deleteShowRating } from '../lib/showRatings'
-import {
-  bulkMarkWatched,
-  fetchWatchedForShow,
-  markWatched,
-  UNKNOWN_WATCHED_AT,
-  unmarkWatched,
-  watchedKey,
-} from '../lib/watched'
+import { bulkMarkWatched, fetchWatchedForShow, markWatched, unmarkWatched, watchedKey } from '../lib/watched'
 import { clearStreamingOverride, fetchStreamingOverride, setStreamingOverride } from '../lib/streamingOverrides'
 import { pickBestFreeProvider } from '../lib/streamingProvider'
 import { useAuth } from '../contexts/AuthContext'
@@ -216,6 +210,58 @@ export default function ShowDetail() {
       for (const row of saved) next[watchedKey(row.season_number, row.episode_number)] = row
       return next
     })
+  }
+
+  /** "Start watching" -- the manual add-to-Now-Watching entry point. Rather
+   * than a separate status field to keep in sync with the real watch data,
+   * this just marks the first episode watched: Now Watching is (and stays)
+   * a pure derivation of episode_watched, so there's only ever one source
+   * of truth for what's in progress. */
+  async function handleStartWatching(input: { watchedAt: string; unknownDate: boolean }) {
+    if (!user || !show) return
+    const firstSeason = show.seasons.find((s) => s.season_number > 0) ?? show.seasons[0]
+    if (!firstSeason) return
+    const episodeName =
+      season && season.season_number === firstSeason.season_number
+        ? (season.episodes.find((ep) => ep.episode_number === 1)?.name ?? null)
+        : null
+    const saved = await bulkMarkWatched({
+      userId: user.id,
+      showId: show.id,
+      showName: show.name,
+      showPosterPath: show.poster_path,
+      showTotalEpisodes: show.number_of_episodes,
+      episodes: [{ seasonNumber: firstSeason.season_number, episodeNumber: 1, episodeName }],
+      watchedAt: input.watchedAt,
+      watchedAtUnknown: input.unknownDate,
+    })
+    setWatched((prev) => {
+      const next = { ...prev }
+      for (const row of saved) next[watchedKey(row.season_number, row.episode_number)] = row
+      return next
+    })
+  }
+
+  /** Same idea as handleToggleWatched, but for logging a single episode on a
+   * specific past date instead of always stamping "now". */
+  async function handleMarkWatchedWithDate(
+    episodeNumber: number,
+    episodeName: string,
+    input: { watchedAt: string; unknownDate: boolean },
+  ) {
+    if (!user || !show || activeSeason === null) return
+    const key = watchedKey(activeSeason, episodeNumber)
+    const saved = await bulkMarkWatched({
+      userId: user.id,
+      showId: show.id,
+      showName: show.name,
+      showPosterPath: show.poster_path,
+      showTotalEpisodes: show.number_of_episodes,
+      episodes: [{ seasonNumber: activeSeason, episodeNumber, episodeName }],
+      watchedAt: input.watchedAt,
+      watchedAtUnknown: input.unknownDate,
+    })
+    if (saved[0]) setWatched((prev) => ({ ...prev, [key]: saved[0] }))
   }
 
   async function handleMarkSeasonWatched(input: { watchedAt: string; unknownDate: boolean }) {
@@ -436,8 +482,11 @@ export default function ShowDetail() {
               />
             </div>
             {watchedCount < totalEpisodes && (
-              <div className="mt-2">
-                <BulkMarkControl
+              <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1.5">
+                {watchedCount === 0 && (
+                  <DateMarkControl label="Start watching" onConfirm={handleStartWatching} />
+                )}
+                <DateMarkControl
                   label="Seen this before? Mark it all watched"
                   confirmMessage={`Mark all ${totalEpisodes} episodes of ${show.name} as watched?`}
                   onConfirm={handleMarkAllWatched}
@@ -544,7 +593,7 @@ export default function ShowDetail() {
                     {seasonWatchedCount}/{season.episodes.length} watched
                   </span>
                   {seasonWatchedCount < season.episodes.length && (
-                    <BulkMarkControl
+                    <DateMarkControl
                       label="Mark season watched"
                       confirmMessage={`Mark all of ${season.name} as watched?`}
                       onConfirm={handleMarkSeasonWatched}
@@ -567,6 +616,9 @@ export default function ShowDetail() {
                         watched[watchedKey(ep.season_number, ep.episode_number)]?.watched_at_unknown,
                       )}
                       onToggleWatched={() => handleToggleWatched(ep.episode_number, ep.name)}
+                      onMarkWatchedWithDate={(input) =>
+                        handleMarkWatchedWithDate(ep.episode_number, ep.name, input)
+                      }
                     />
                   ))}
             </div>
@@ -582,90 +634,6 @@ function StarGlyph() {
     <svg width="14" height="14" viewBox="0 0 24 24" fill="var(--color-star)">
       <path d="M12 2.5l2.9 6.15 6.6.72-4.95 4.6 1.3 6.53L12 17.3l-5.85 3.2 1.3-6.53-4.95-4.6 6.6-.72L12 2.5z" />
     </svg>
-  )
-}
-
-/**
- * "I watched this before I started using TV Box" escape hatch -- a text
- * trigger that expands into a date picker + confirm, so a bulk log lands on
- * the right date in History instead of dating everything today.
- */
-function BulkMarkControl({
-  label,
-  confirmMessage,
-  onConfirm,
-}: {
-  label: string
-  confirmMessage: string
-  onConfirm: (input: { watchedAt: string; unknownDate: boolean }) => Promise<void>
-}) {
-  const [open, setOpen] = useState(false)
-  const [date, setDate] = useState(() => new Date().toISOString().slice(0, 10))
-  const [unknownDate, setUnknownDate] = useState(false)
-  const [saving, setSaving] = useState(false)
-  const today = new Date().toISOString().slice(0, 10)
-
-  if (!open) {
-    return (
-      <button
-        type="button"
-        onClick={() => setOpen(true)}
-        className="text-xs text-accent-400 hover:underline"
-      >
-        {label}
-      </button>
-    )
-  }
-
-  return (
-    <div className="flex flex-col gap-1.5">
-      <div className="flex flex-wrap items-center gap-1.5">
-        <input
-          type="date"
-          value={date}
-          max={today}
-          disabled={unknownDate}
-          onChange={(e) => setDate(e.target.value)}
-          className="rounded-lg border border-hairline-strong bg-base-900 px-2 py-1 text-xs text-base-200 disabled:opacity-40"
-        />
-        <button
-          type="button"
-          disabled={saving}
-          onClick={async () => {
-            if (!window.confirm(confirmMessage)) return
-            setSaving(true)
-            try {
-              await onConfirm({
-                watchedAt: unknownDate ? UNKNOWN_WATCHED_AT : new Date(`${date}T12:00:00`).toISOString(),
-                unknownDate,
-              })
-              setOpen(false)
-            } finally {
-              setSaving(false)
-            }
-          }}
-          className="rounded-lg bg-accent-500/15 px-2.5 py-1 text-xs font-medium text-accent-300 ring-1 ring-accent-500/40 transition-opacity duration-150 disabled:opacity-60"
-        >
-          {saving ? 'Marking…' : 'Confirm'}
-        </button>
-        <button
-          type="button"
-          onClick={() => setOpen(false)}
-          className="text-xs text-base-500 hover:text-base-300"
-        >
-          Cancel
-        </button>
-      </div>
-      <label className="flex items-center gap-1.5 text-[11px] text-base-500">
-        <input
-          type="checkbox"
-          checked={unknownDate}
-          onChange={(e) => setUnknownDate(e.target.checked)}
-          className="h-3 w-3 rounded border-hairline-strong bg-base-900 accent-accent-500"
-        />
-        Don&apos;t remember exactly when — just log it as watched a while ago
-      </label>
-    </div>
   )
 }
 
