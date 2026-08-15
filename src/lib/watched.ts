@@ -83,6 +83,45 @@ export async function markWatched(input: MarkWatchedInput): Promise<EpisodeWatch
   return data as EpisodeWatched
 }
 
+export interface BulkMarkWatchedInput {
+  userId: string
+  showId: number
+  showName: string
+  showPosterPath: string | null
+  showTotalEpisodes: number | null
+  episodes: { seasonNumber: number; episodeNumber: number; episodeName?: string | null }[]
+  /** ISO timestamp stamped on every row -- lets a bulk log land on the right date in History. */
+  watchedAt: string
+}
+
+/**
+ * Marks many episodes watched in one request (e.g. "mark this whole show/season
+ * watched" for something seen before you started using TV Box). Far cheaper
+ * than looping markWatched() per episode -- one upsert, one round trip.
+ */
+export async function bulkMarkWatched(input: BulkMarkWatchedInput): Promise<EpisodeWatched[]> {
+  if (input.episodes.length === 0) return []
+  const rows = input.episodes.map((ep) => ({
+    user_id: input.userId,
+    show_id: input.showId,
+    show_name: input.showName,
+    show_poster_path: input.showPosterPath,
+    show_total_episodes: input.showTotalEpisodes,
+    season_number: ep.seasonNumber,
+    episode_number: ep.episodeNumber,
+    episode_name: ep.episodeName ?? null,
+    watched_at: input.watchedAt,
+  }))
+
+  const { data, error } = await supabase
+    .from('episode_watched')
+    .upsert(rows, { onConflict: 'user_id,show_id,season_number,episode_number' })
+    .select()
+
+  if (error) throw error
+  return (data ?? []) as EpisodeWatched[]
+}
+
 export async function unmarkWatched(
   userId: string,
   showId: number,

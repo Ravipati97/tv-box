@@ -7,7 +7,7 @@ import StarRating from '../components/StarRating'
 import { EpisodeRowSkeleton } from '../components/Skeletons'
 import { backdropUrl, getSeasonDetail, getShowDetail, posterUrl, yearFromDate } from '../lib/tmdb'
 import { fetchAllShowRatings, upsertShowRating, deleteShowRating } from '../lib/showRatings'
-import { fetchWatchedForShow, markWatched, unmarkWatched, watchedKey } from '../lib/watched'
+import { bulkMarkWatched, fetchWatchedForShow, markWatched, unmarkWatched, watchedKey } from '../lib/watched'
 import { useAuth } from '../contexts/AuthContext'
 import type {
   ShowRatingWithUser,
@@ -130,6 +130,55 @@ export default function ShowDetail() {
       episodeName,
     })
     setWatched((prev) => ({ ...prev, [key]: saved }))
+  }
+
+  async function handleMarkAllWatched(dateIso: string) {
+    if (!user || !show) return
+    const episodes = show.seasons
+      .filter((s) => s.season_number > 0)
+      .flatMap((s) =>
+        Array.from({ length: s.episode_count }, (_, i) => ({
+          seasonNumber: s.season_number,
+          episodeNumber: i + 1,
+        })),
+      )
+    const saved = await bulkMarkWatched({
+      userId: user.id,
+      showId: show.id,
+      showName: show.name,
+      showPosterPath: show.poster_path,
+      showTotalEpisodes: show.number_of_episodes,
+      episodes,
+      watchedAt: dateIso,
+    })
+    setWatched((prev) => {
+      const next = { ...prev }
+      for (const row of saved) next[watchedKey(row.season_number, row.episode_number)] = row
+      return next
+    })
+  }
+
+  async function handleMarkSeasonWatched(dateIso: string) {
+    if (!user || !show || !season) return
+    const episodes = season.episodes.map((ep) => ({
+      seasonNumber: ep.season_number,
+      episodeNumber: ep.episode_number,
+      episodeName: ep.name,
+    }))
+    const saved = await bulkMarkWatched({
+      userId: user.id,
+      showId: show.id,
+      showName: show.name,
+      showPosterPath: show.poster_path,
+      showTotalEpisodes: show.number_of_episodes,
+      episodes,
+      watchedAt: dateIso,
+    })
+    setWatched((prev) => {
+      const next = { ...prev }
+      for (const row of saved) next[watchedKey(row.season_number, row.episode_number)] = row
+      return next
+    })
   }
 
   async function handleRateShow(value: number) {
@@ -300,6 +349,15 @@ export default function ShowDetail() {
                 style={{ width: `${Math.min(100, (watchedCount / totalEpisodes) * 100)}%` }}
               />
             </div>
+            {watchedCount < totalEpisodes && (
+              <div className="mt-2">
+                <BulkMarkControl
+                  label="Seen this before? Mark it all watched"
+                  confirmMessage={`Mark all ${totalEpisodes} episodes of ${show.name} as watched?`}
+                  onConfirm={handleMarkAllWatched}
+                />
+              </div>
+            )}
           </div>
         )}
 
@@ -323,11 +381,20 @@ export default function ShowDetail() {
         {/* Seasons */}
         {show && show.seasons.length > 0 && activeSeason !== null && (
           <div className="mt-8">
-            <div className="mb-4 flex items-center justify-between">
+            <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
               <SeasonTabs seasons={show.seasons} active={activeSeason} onSelect={setActiveSeason} />
               {season && seasonWatchedCount !== null && (
-                <div className="hidden shrink-0 text-xs text-base-400 sm:block">
-                  {seasonWatchedCount}/{season.episodes.length} watched
+                <div className="flex shrink-0 items-center gap-2 text-xs text-base-400">
+                  <span>
+                    {seasonWatchedCount}/{season.episodes.length} watched
+                  </span>
+                  {seasonWatchedCount < season.episodes.length && (
+                    <BulkMarkControl
+                      label="Mark season watched"
+                      confirmMessage={`Mark all of ${season.name} as watched?`}
+                      onConfirm={handleMarkSeasonWatched}
+                    />
+                  )}
                 </div>
               )}
             </div>
@@ -357,5 +424,73 @@ function StarGlyph() {
     <svg width="14" height="14" viewBox="0 0 24 24" fill="var(--color-star)">
       <path d="M12 2.5l2.9 6.15 6.6.72-4.95 4.6 1.3 6.53L12 17.3l-5.85 3.2 1.3-6.53-4.95-4.6 6.6-.72L12 2.5z" />
     </svg>
+  )
+}
+
+/**
+ * "I watched this before I started using TV Box" escape hatch -- a text
+ * trigger that expands into a date picker + confirm, so a bulk log lands on
+ * the right date in History instead of dating everything today.
+ */
+function BulkMarkControl({
+  label,
+  confirmMessage,
+  onConfirm,
+}: {
+  label: string
+  confirmMessage: string
+  onConfirm: (dateIso: string) => Promise<void>
+}) {
+  const [open, setOpen] = useState(false)
+  const [date, setDate] = useState(() => new Date().toISOString().slice(0, 10))
+  const [saving, setSaving] = useState(false)
+  const today = new Date().toISOString().slice(0, 10)
+
+  if (!open) {
+    return (
+      <button
+        type="button"
+        onClick={() => setOpen(true)}
+        className="text-xs text-accent-400 hover:underline"
+      >
+        {label}
+      </button>
+    )
+  }
+
+  return (
+    <div className="flex flex-wrap items-center gap-1.5">
+      <input
+        type="date"
+        value={date}
+        max={today}
+        onChange={(e) => setDate(e.target.value)}
+        className="rounded-lg border border-white/10 bg-base-900 px-2 py-1 text-xs text-base-200"
+      />
+      <button
+        type="button"
+        disabled={saving}
+        onClick={async () => {
+          if (!window.confirm(confirmMessage)) return
+          setSaving(true)
+          try {
+            await onConfirm(new Date(`${date}T12:00:00`).toISOString())
+            setOpen(false)
+          } finally {
+            setSaving(false)
+          }
+        }}
+        className="rounded-lg bg-accent-500/15 px-2.5 py-1 text-xs font-medium text-accent-300 ring-1 ring-accent-500/40 transition-opacity duration-150 disabled:opacity-60"
+      >
+        {saving ? 'Marking…' : 'Confirm'}
+      </button>
+      <button
+        type="button"
+        onClick={() => setOpen(false)}
+        className="text-xs text-base-500 hover:text-base-300"
+      >
+        Cancel
+      </button>
+    </div>
   )
 }
