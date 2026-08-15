@@ -4,6 +4,24 @@ import { motion } from 'framer-motion'
 const linkBase =
   'flex flex-col items-center justify-center gap-0.5 text-[11px] font-medium transition-colors duration-200 md:flex-row md:gap-1.5 md:text-sm md:px-3 md:py-1.5 md:rounded-full'
 
+function HomeIcon({ active }: { active: boolean }) {
+  return (
+    <svg
+      width="21"
+      height="21"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke={active ? 'var(--color-accent-400)' : 'currentColor'}
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <circle cx="12" cy="12" r="9" />
+      <path d="M10 8.5l6 3.5-6 3.5v-7Z" fill={active ? 'var(--color-accent-400)' : 'currentColor'} stroke="none" />
+    </svg>
+  )
+}
+
 function SearchIcon({ active }: { active: boolean }) {
   return (
     <svg
@@ -65,7 +83,7 @@ export default function Navbar() {
       {/* Top bar (always visible) */}
       <header className="sticky top-0 z-40 border-b border-white/5 bg-base-950/80 backdrop-blur-md">
         <div className="mx-auto flex max-w-5xl items-center justify-between px-4 py-3 sm:px-6">
-          <NavLink to="/search" className="flex items-center gap-2">
+          <NavLink to="/home" className="flex items-center gap-2">
             <svg width="24" height="24" viewBox="0 0 32 32" fill="none">
               <rect width="32" height="32" rx="8" fill="var(--color-accent-500)" />
               <rect x="6" y="9" width="20" height="14" rx="3" fill="var(--color-base-950)" />
@@ -77,6 +95,19 @@ export default function Navbar() {
           </NavLink>
 
           <nav className="hidden items-center gap-1 md:flex">
+            <NavLink
+              to="/home"
+              className={({ isActive }) =>
+                `${linkBase} ${isActive ? 'bg-white/5 text-base-100' : 'text-base-400 hover:text-base-100'}`
+              }
+            >
+              {({ isActive }) => (
+                <>
+                  <HomeIcon active={isActive} />
+                  Home
+                </>
+              )}
+            </NavLink>
             <NavLink
               to="/search"
               className={({ isActive }) =>
@@ -127,6 +158,19 @@ export default function Navbar() {
         transition={{ duration: 0.3 }}
         className="fixed inset-x-0 bottom-0 z-40 flex border-t border-white/5 bg-base-950/90 pb-[env(safe-area-inset-bottom)] backdrop-blur-md md:hidden"
       >
+        <NavLink
+          to="/home"
+          className={({ isActive }) =>
+            `${linkBase} flex-1 py-2.5 ${isActive ? 'text-base-100' : 'text-base-400'}`
+          }
+        >
+          {({ isActive }) => (
+            <>
+              <HomeIcon active={isActive} />
+              Home
+            </>
+          )}
+        </NavLink>
         <NavLink
           to="/search"
           className={({ isActive }) =>

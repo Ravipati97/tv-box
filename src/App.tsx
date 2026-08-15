@@ -7,6 +7,7 @@ import Navbar from './components/Navbar'
 import PasscodeGate from './components/PasscodeGate'
 import { hasPassedGate, isGateConfigured } from './lib/siteGate'
 import Login from './pages/Login'
+import Home from './pages/Home'
 import Search from './pages/Search'
 import ShowDetail from './pages/ShowDetail'
 import Profile from './pages/Profile'
@@ -41,6 +42,14 @@ function AppShell() {
       <AnimatePresence mode="wait">
         <Routes location={location} key={location.pathname}>
           <Route path="/login" element={<Login />} />
+          <Route
+            path="/home"
+            element={
+              <ProtectedRoute>
+                <Home />
+              </ProtectedRoute>
+            }
+          />
           <Route
             path="/search"
             element={
@@ -97,8 +106,8 @@ function AppShell() {
               </ProtectedRoute>
             }
           />
-          <Route path="/" element={<Navigate to={user ? '/search' : '/login'} replace />} />
-          <Route path="*" element={<Navigate to={user ? '/search' : '/login'} replace />} />
+          <Route path="/" element={<Navigate to={user ? '/home' : '/login'} replace />} />
+          <Route path="*" element={<Navigate to={user ? '/home' : '/login'} replace />} />
         </Routes>
       </AnimatePresence>
     </div>
