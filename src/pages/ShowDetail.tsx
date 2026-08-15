@@ -40,7 +40,7 @@ import { addToWatchlist, fetchWatchlistItem, removeFromWatchlist } from '../lib/
 import { deleteRewatch, fetchRewatchesForShow, logRewatch } from '../lib/rewatches'
 import { fetchListMembershipForShow } from '../lib/lists'
 import { computeSeasonProgress } from '../lib/seasonProgress'
-import { formatShortDate } from '../lib/date'
+import { formatShortDate, isFutureDate } from '../lib/date'
 import { useAuth } from '../contexts/AuthContext'
 import type {
   EpisodeWatched,
@@ -216,8 +216,7 @@ export default function ShowDetail() {
   // Home's badge (a different season, not currently open) requires one.
   const nextUpcomingEpisode = useMemo(() => {
     if (!season) return null
-    const now = new Date()
-    return season.episodes.find((ep) => ep.air_date && new Date(ep.air_date) > now) ?? null
+    return season.episodes.find((ep) => ep.air_date && isFutureDate(ep.air_date)) ?? null
   }, [season])
 
   const myShowRating = useMemo(
@@ -264,18 +263,36 @@ export default function ShowDetail() {
 
   async function handleMarkAllWatched(input: { watchedAt: string; unknownDate: boolean }) {
     if (!user || !show) return
-    // No runtimeMinutes here -- show.seasons only has per-season episode
-    // counts, not per-episode runtimes (that needs a full season fetch,
-    // which this fast whole-show action deliberately skips). Those rows
-    // just contribute 0 to "hours watched" rather than blocking the action.
-    const episodes = show.seasons
-      .filter((s) => s.season_number > 0)
-      .flatMap((s) =>
-        Array.from({ length: s.episode_count }, (_, i) => ({
+    const realSeasons = show.seasons.filter((s) => s.season_number > 0)
+    // Fetch every season's episode list so each row can carry its real
+    // runtime -- "Mark season watched" already does this (it starts from a
+    // loaded season), and without it here, an entire show logged this way
+    // would silently contribute 0 to "hours watched" forever (only fixable
+    // by re-running scripts/backfill-runtime.mjs). One extra TMDB call per
+    // season, but this action only runs once per show.
+    const seasonDetails = await Promise.all(
+      realSeasons.map((s) => getSeasonDetail(show.id, s.season_number).catch(() => null)),
+    )
+    const runtimeByKey = new Map<string, number | null>()
+    for (const detail of seasonDetails) {
+      if (!detail) continue
+      for (const ep of detail.episodes) {
+        runtimeByKey.set(watchedKey(ep.season_number, ep.episode_number), ep.runtime ?? null)
+      }
+    }
+    const episodes = realSeasons.flatMap((s) =>
+      Array.from({ length: s.episode_count }, (_, i) => {
+        const episodeNumber = i + 1
+        return {
           seasonNumber: s.season_number,
-          episodeNumber: i + 1,
-        })),
-      )
+          episodeNumber,
+          // Falls back to null (contributes 0 to hours watched) only if that
+          // season's fetch itself failed above -- everything else gets a
+          // real runtime, same as marking a season or episode individually.
+          runtimeMinutes: runtimeByKey.get(watchedKey(s.season_number, episodeNumber)) ?? null,
+        }
+      }),
+    )
     // Snapshot what's about to change *before* the write, so a mis-tap here
     // (this is exactly what silently overwrote real watch dates once) can be
     // undone instead of requiring a manual, error-prone fix.
@@ -354,12 +371,19 @@ export default function ShowDetail() {
     if (!user || !show) return
     const firstSeason = show.seasons.find((s) => s.season_number > 0) ?? show.seasons[0]
     if (!firstSeason) return
-    const firstEpisode =
-      season && season.season_number === firstSeason.season_number
-        ? (season.episodes.find((ep) => ep.episode_number === 1) ?? null)
-        : null
     setStartingWatch(true)
     try {
+      // Fetched directly rather than read from `season` state: that state
+      // might still be mid-load (or on a different season) at the moment
+      // this fires, and this is the only chance to capture episode 1's
+      // runtime for "hours watched" -- falling back to state here could
+      // silently record a null runtime purely from a loading-order race.
+      const firstEpisode =
+        season && season.season_number === firstSeason.season_number
+          ? (season.episodes.find((ep) => ep.episode_number === 1) ?? null)
+          : await getSeasonDetail(show.id, firstSeason.season_number)
+              .then((detail) => detail.episodes.find((ep) => ep.episode_number === 1) ?? null)
+              .catch(() => null)
       const saved = await bulkMarkWatched({
         userId: user.id,
         showId: show.id,
@@ -416,7 +440,7 @@ export default function ShowDetail() {
     // the matching check in EpisodeRow.tsx. Marking these "watched" in bulk
     // would be the same nonsensical action a single click is now blocked from.
     const episodes = season.episodes
-      .filter((ep) => !(ep.air_date && new Date(ep.air_date) > new Date()))
+      .filter((ep) => !(ep.air_date && isFutureDate(ep.air_date)))
       .map((ep) => ({
         seasonNumber: ep.season_number,
         episodeNumber: ep.episode_number,

@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import type { ReactNode } from 'react'
 import { UNKNOWN_WATCHED_AT } from '../lib/watched'
+import { todayLocalDateInput } from '../lib/date'
 
 /**
  * A small text trigger that expands into a date picker + confirm, so any
@@ -29,10 +30,10 @@ export default function DateMarkControl({
   confirmSummary?: ReactNode
 }) {
   const [open, setOpen] = useState(false)
-  const [date, setDate] = useState(() => new Date().toISOString().slice(0, 10))
+  const [date, setDate] = useState(todayLocalDateInput)
   const [unknownDate, setUnknownDate] = useState(false)
   const [saving, setSaving] = useState(false)
-  const today = new Date().toISOString().slice(0, 10)
+  const today = todayLocalDateInput()
 
   if (!open) {
     return (

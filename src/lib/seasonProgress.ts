@@ -1,4 +1,5 @@
 import { getSeasonDetail, getShowDetail } from './tmdb'
+import { isFutureDate } from './date'
 import type { TmdbSeasonSummary } from '../types'
 
 /** One season's watched/total, in order -- the building block for a
@@ -103,8 +104,7 @@ export async function fetchNextEpisode(showId: number, seasonNumber: number): Pr
 
   try {
     const detail = await getSeasonDetail(showId, seasonNumber)
-    const now = new Date()
-    const next = detail.episodes.find((ep) => ep.air_date && new Date(ep.air_date) > now)
+    const next = detail.episodes.find((ep) => ep.air_date && isFutureDate(ep.air_date))
     const result: NextEpisode | null = next
       ? { seasonNumber, episodeNumber: next.episode_number, airDate: next.air_date! }
       : null

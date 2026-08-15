@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { motion } from 'framer-motion'
 import { stillUrl } from '../lib/tmdb'
-import { formatShortDate } from '../lib/date'
+import { formatShortDate, isFutureDate } from '../lib/date'
 import DateMarkControl from './DateMarkControl'
 import type { TmdbEpisode } from '../types'
 
@@ -36,7 +36,7 @@ export default function EpisodeRow({
   // look stuck. Only treated as upcoming with a real, known future date --
   // a missing air_date on an already-released obscure episode shouldn't
   // get swept up in this.
-  const isUpcoming = Boolean(episode.air_date && new Date(episode.air_date) > new Date())
+  const isUpcoming = Boolean(episode.air_date && isFutureDate(episode.air_date))
 
   async function handleToggle() {
     setSaving(true)

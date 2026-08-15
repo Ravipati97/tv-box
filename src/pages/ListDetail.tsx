@@ -25,6 +25,16 @@ export default function ListDetail() {
       .then(([userRow, listRow, itemRows]) => {
         if (cancelled) return
         setProfile(userRow)
+        // A list's URL is scoped to a username, but listId is looked up on
+        // its own -- without this check, a mismatched URL (list from one
+        // user's page, ID from another's) would render as if it belonged to
+        // the wrong owner, and that owner's "isMine" controls (delete list,
+        // remove show) would act on someone else's list.
+        if (listRow && userRow && listRow.user_id !== userRow.id) {
+          setList(null)
+          setItems([])
+          return
+        }
         setList(listRow)
         setItems(itemRows)
       })
