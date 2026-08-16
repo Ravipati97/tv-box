@@ -65,6 +65,13 @@ export default function EpisodeRow({
           {still ? (
             <img
               src={still}
+              // The still renders small (112-160 CSS px wide) but phone
+              // screens are commonly 2-3x device pixel ratio, and w300
+              // alone falls short of that -- looked fine on a 1x laptop
+              // display, soft/pixelated on a real phone. Letting the
+              // browser pick a density-matched variant fixes that without
+              // over-fetching the larger sizes on 1x displays.
+              srcSet={`${stillUrl(episode.still_path, 'w300')} 1x, ${stillUrl(episode.still_path, 'w780')} 2x, ${stillUrl(episode.still_path, 'w1280')} 3x`}
               alt=""
               loading="lazy"
               decoding="async"
