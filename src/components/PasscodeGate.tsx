@@ -2,6 +2,7 @@ import { useState } from 'react'
 import type { FormEvent } from 'react'
 import { motion } from 'framer-motion'
 import { checkPasscode, markGatePassed } from '../lib/siteGate'
+import AppLogo from './AppLogo'
 
 export default function PasscodeGate({ onSuccess }: { onSuccess: () => void }) {
   const [code, setCode] = useState('')
@@ -30,17 +31,7 @@ export default function PasscodeGate({ onSuccess }: { onSuccess: () => void }) {
         className="w-full max-w-sm"
       >
         <div className="mb-8 flex flex-col items-center text-center">
-          <svg
-            width="48"
-            height="48"
-            viewBox="0 0 32 32"
-            fill="none"
-            className="mb-4 drop-shadow-[0_6px_20px_rgba(139,92,246,0.35)]"
-          >
-            <rect width="32" height="32" rx="8" fill="var(--color-accent-500)" />
-            <rect x="6" y="9" width="20" height="14" rx="3" fill="var(--color-base-950)" />
-            <path d="M15 14.5L19 16.5L15 18.5V14.5Z" fill="var(--color-star)" />
-          </svg>
+          <AppLogo size={48} className="mb-4 drop-shadow-[0_6px_20px_rgba(139,92,246,0.35)]" />
           <h1 className="font-display text-2xl font-semibold text-base-100">TV Box</h1>
           <p className="mt-1 text-sm text-base-400">This one&apos;s invite-only.</p>
         </div>

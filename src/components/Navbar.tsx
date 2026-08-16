@@ -2,6 +2,7 @@ import { NavLink, useLocation } from 'react-router-dom'
 import { AnimatePresence, motion } from 'framer-motion'
 import { useTheme } from '../contexts/ThemeContext'
 import { scrollBehavior } from '../lib/motion'
+import AppLogo from './AppLogo'
 
 const linkBase =
   'relative flex flex-col items-center justify-center gap-0.5 text-[11px] font-medium transition-colors duration-200 md:flex-row md:gap-1.5 md:text-sm md:px-3.5 md:py-1.5 md:rounded-full'
@@ -173,11 +174,7 @@ export default function Navbar() {
       <header className="sticky top-0 z-40 border-b border-hairline bg-base-950/80 backdrop-blur-md">
         <div className="mx-auto flex max-w-5xl items-center justify-between px-4 py-3 sm:px-6">
           <NavLink to="/home" onClick={() => handleNavClick('/home')} className="flex items-center gap-2">
-            <svg width="24" height="24" viewBox="0 0 32 32" fill="none">
-              <rect width="32" height="32" rx="8" fill="var(--color-accent-500)" />
-              <rect x="6" y="9" width="20" height="14" rx="3" fill="var(--color-base-950)" />
-              <path d="M15 14.5L19 16.5L15 18.5V14.5Z" fill="var(--color-star)" />
-            </svg>
+            <AppLogo size={24} />
             <span className="font-display text-lg font-semibold tracking-tight text-base-100">
               TV Box
             </span>
