@@ -170,8 +170,14 @@ export default function Navbar() {
 
   return (
     <>
-      {/* Top bar (always visible) */}
-      <header className="sticky top-0 z-40 border-b border-hairline bg-base-950/80 backdrop-blur-md">
+      {/* Top bar (always visible). pt-[env(safe-area-inset-top)] keeps the
+          logo/theme-toggle clear of the iOS status bar + notch when the app
+          is added to the home screen -- viewport-fit=cover (index.html) lets
+          the page draw under that area, and black-translucent status-bar-style
+          means nothing else pushes content down automatically. Sticky (not
+          fixed) so the extra height is reserved in normal flow instead of
+          needing a matching top-padding on every page's content below it. */}
+      <header className="sticky top-0 z-40 border-b border-hairline bg-base-950/80 pt-[env(safe-area-inset-top)] backdrop-blur-md">
         <div className="mx-auto flex max-w-5xl items-center justify-between px-4 py-3 sm:px-6">
           <NavLink to="/home" onClick={() => handleNavClick('/home')} className="flex items-center gap-2">
             <AppLogo size={24} />
