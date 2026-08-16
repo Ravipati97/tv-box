@@ -56,3 +56,25 @@ export async function deleteRewatch(id: string): Promise<void> {
   const { error } = await supabase.from('show_rewatches').delete().eq('id', id)
   if (error) throw error
 }
+
+/** Re-inserts a deleted rewatch, preserving its original rewatched_at (not
+ * "now") -- used to undo deleteRewatch. There's no unique constraint on this
+ * table to upsert against (repeat rewatches are the whole point), so this is
+ * a plain insert and the restored row gets a new id -- fine, since nothing
+ * in the UI keys off a rewatch's id beyond React's list key. */
+export async function restoreRewatch(row: ShowRewatch): Promise<ShowRewatch> {
+  const { data, error } = await supabase
+    .from('show_rewatches')
+    .insert({
+      user_id: row.user_id,
+      show_id: row.show_id,
+      show_name: row.show_name,
+      show_poster_path: row.show_poster_path,
+      rewatched_at: row.rewatched_at,
+    })
+    .select()
+    .single()
+
+  if (error) throw error
+  return data as ShowRewatch
+}

@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react'
-import { addShowToList, createList, fetchListsForUser, removeShowFromList } from '../lib/lists'
-import UndoToast from './UndoToast'
+import { addShowToList, createList, deleteList, fetchListsForUser, removeShowFromList } from '../lib/lists'
+import Toast from './Toast'
+import { useToast } from '../hooks/useToast'
+import { useEscapeAndFocusReturn } from '../hooks/useEscapeAndFocusReturn'
 import type { ShowListWithCount } from '../types'
 
 /**
@@ -29,11 +31,15 @@ export default function AddToListPicker({
   const [creating, setCreating] = useState(false)
   const [newName, setNewName] = useState('')
   const [savingId, setSavingId] = useState<string | null>(null)
-  // Which list a removal can still be undone on, if any. Tied to this
-  // panel's own lifetime (closing "Add to a list" dismisses it) rather than
-  // living at the page level -- simpler, and the removal is still visible
-  // right there in the list either way.
-  const [removeUndo, setRemoveUndo] = useState<{ listId: string; listName: string } | null>(null)
+  // Toast state (undo + error) is tied to this panel's own lifetime
+  // (closing "Add to a list" dismisses it) rather than living at the page
+  // level -- simpler, and the removal is still visible right there either way.
+  const { toast, showUndo, showError, dismiss } = useToast()
+
+  // Only ever mounted while open (ShowDetail conditionally renders it) --
+  // "active" for the whole lifetime of this component instance.
+  useEscapeAndFocusReturn(true, onClose)
+  useEscapeAndFocusReturn(creating, () => setCreating(false))
 
   useEffect(() => {
     let cancelled = false
@@ -49,15 +55,27 @@ export default function AddToListPicker({
     setSavingId(listId)
     try {
       if (memberOf.has(listId)) {
-        await removeShowFromList(listId, showId)
+        const removedList = lists?.find((l) => l.id === listId)
+        try {
+          await removeShowFromList(listId, showId)
+        } catch {
+          showError('Failed to remove from list. Try again.')
+          return
+        }
         const next = new Set(memberOf)
         next.delete(listId)
         onChange(next)
         setLists((prev) => prev?.map((l) => (l.id === listId ? { ...l, itemCount: l.itemCount - 1 } : l)) ?? prev)
-        const removedList = lists?.find((l) => l.id === listId)
-        if (removedList) setRemoveUndo({ listId, listName: removedList.name })
+        if (removedList) {
+          showUndo(`Removed from "${removedList.name}"`, () => handleUndoRemove(listId))
+        }
       } else {
-        await addShowToList({ listId, showId, showName, showPosterPath })
+        try {
+          await addShowToList({ listId, showId, showName, showPosterPath })
+        } catch {
+          showError('Failed to add to list. Try again.')
+          return
+        }
         const next = new Set(memberOf)
         next.add(listId)
         onChange(next)
@@ -68,10 +86,7 @@ export default function AddToListPicker({
     }
   }
 
-  async function handleUndoRemove() {
-    if (!removeUndo) return
-    const { listId } = removeUndo
-    setRemoveUndo(null)
+  async function handleUndoRemove(listId: string) {
     setSavingId(listId)
     try {
       await addShowToList({ listId, showId, showName, showPosterPath })
@@ -79,6 +94,8 @@ export default function AddToListPicker({
       next.add(listId)
       onChange(next)
       setLists((prev) => prev?.map((l) => (l.id === listId ? { ...l, itemCount: l.itemCount + 1 } : l)) ?? prev)
+    } catch {
+      showError('Failed to undo. Try adding it back manually.')
     } finally {
       setSavingId(null)
     }
@@ -90,11 +107,21 @@ export default function AddToListPicker({
     setSavingId('new')
     try {
       const list = await createList(userId, name)
-      await addShowToList({ listId: list.id, showId, showName, showPosterPath })
+      try {
+        await addShowToList({ listId: list.id, showId, showName, showPosterPath })
+      } catch {
+        // The list itself was created but the show didn't make it on -- an
+        // empty orphan list nobody asked for is worse than just retrying the
+        // whole thing, so clean it up rather than leaving it behind.
+        await deleteList(list.id).catch(() => {})
+        throw new Error('add-to-new-list-failed')
+      }
       setLists((prev) => [{ ...list, itemCount: 1 }, ...(prev ?? [])])
       onChange(new Set([...memberOf, list.id]))
       setNewName('')
       setCreating(false)
+    } catch {
+      showError('Failed to create list. Try again.')
     } finally {
       setSavingId(null)
     }
@@ -171,13 +198,7 @@ export default function AddToListPicker({
           </button>
         )}
       </div>
-      {removeUndo && (
-        <UndoToast
-          message={`Removed from "${removeUndo.listName}"`}
-          onUndo={handleUndoRemove}
-          onDismiss={() => setRemoveUndo(null)}
-        />
-      )}
+      {toast && <Toast message={toast.message} tone={toast.tone} action={toast.action} onDismiss={dismiss} />}
     </>
   )
 }

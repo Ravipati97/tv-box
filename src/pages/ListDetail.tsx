@@ -5,7 +5,9 @@ import { useAuth } from '../contexts/AuthContext'
 import { fetchUserByUsername } from '../lib/users'
 import { addShowToList, deleteList, fetchList, fetchListItems, removeShowFromList } from '../lib/lists'
 import { posterUrl } from '../lib/tmdb'
-import UndoToast from '../components/UndoToast'
+import Toast from '../components/Toast'
+import { useToast } from '../hooks/useToast'
+import { useEscapeAndFocusReturn } from '../hooks/useEscapeAndFocusReturn'
 import type { AppUser, ShowList, ShowListItem } from '../types'
 
 export default function ListDetail() {
@@ -22,7 +24,9 @@ export default function ListDetail() {
   // DateMarkControl) is the guard against one mis-tap wiping it out.
   const [confirmingDelete, setConfirmingDelete] = useState(false)
   const [deleting, setDeleting] = useState(false)
-  const [removeUndo, setRemoveUndo] = useState<{ message: string; item: ShowListItem } | null>(null)
+  const { toast, showUndo, showError, dismiss } = useToast()
+
+  useEscapeAndFocusReturn(confirmingDelete, () => setConfirmingDelete(false))
 
   useEffect(() => {
     if (!username || !listId) return
@@ -58,24 +62,30 @@ export default function ListDetail() {
   async function handleRemove(item: ShowListItem) {
     if (!listId) return
     setItems((prev) => prev.filter((i) => i.show_id !== item.show_id))
-    await removeShowFromList(listId, item.show_id)
+    try {
+      await removeShowFromList(listId, item.show_id)
+    } catch {
+      setItems((prev) => [item, ...prev])
+      showError(`Failed to remove ${item.show_name}. Try again.`)
+      return
+    }
     // The × button sits right next to the poster with no separate confirm
     // step, so a mis-tap is easy -- give it the same recoverable undo as
     // every other removal in the app instead of a silent, permanent drop.
-    setRemoveUndo({ message: `Removed ${item.show_name} from this list`, item })
-  }
-
-  async function handleUndoRemove() {
-    if (!listId || !removeUndo) return
-    const { item } = removeUndo
-    setRemoveUndo(null)
-    const saved = await addShowToList({
-      listId,
-      showId: item.show_id,
-      showName: item.show_name,
-      showPosterPath: item.show_poster_path,
+    showUndo(`Removed ${item.show_name} from this list`, async () => {
+      if (!listId) return
+      try {
+        const saved = await addShowToList({
+          listId,
+          showId: item.show_id,
+          showName: item.show_name,
+          showPosterPath: item.show_poster_path,
+        })
+        setItems((prev) => [saved, ...prev])
+      } catch {
+        showError('Failed to undo. Try adding it back manually.')
+      }
     })
-    setItems((prev) => [saved, ...prev])
   }
 
   async function handleDeleteList() {
@@ -87,6 +97,7 @@ export default function ListDetail() {
     } catch {
       setDeleting(false)
       setConfirmingDelete(false)
+      showError('Failed to delete this list. Try again.')
     }
   }
 
@@ -208,9 +219,7 @@ export default function ListDetail() {
         )
       )}
 
-      {removeUndo && (
-        <UndoToast message={removeUndo.message} onUndo={handleUndoRemove} onDismiss={() => setRemoveUndo(null)} />
-      )}
+      {toast && <Toast message={toast.message} tone={toast.tone} action={toast.action} onDismiss={dismiss} />}
     </div>
   )
 }

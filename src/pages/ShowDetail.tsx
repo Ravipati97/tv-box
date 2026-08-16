@@ -5,9 +5,11 @@ import SeasonTabs from '../components/SeasonTabs'
 import EpisodeRow from '../components/EpisodeRow'
 import RatingSummary from '../components/RatingSummary'
 import DateMarkControl from '../components/DateMarkControl'
-import UndoToast from '../components/UndoToast'
+import Toast from '../components/Toast'
 import AddToListPicker from '../components/AddToListPicker'
 import { EpisodeRowSkeleton } from '../components/Skeletons'
+import { useToast } from '../hooks/useToast'
+import { useEscapeAndFocusReturn } from '../hooks/useEscapeAndFocusReturn'
 import {
   backdropUrl,
   detectRegion,
@@ -38,7 +40,7 @@ import { clearStreamingOverride, fetchStreamingOverride, setStreamingOverride } 
 import { invalidatePlatformCache, pickBestFreeProvider } from '../lib/streamingProvider'
 import { addToWatchlist, fetchWatchlistItem, removeFromWatchlist } from '../lib/watchlist'
 import { fetchStartedItem, startShow } from '../lib/showStarted'
-import { deleteRewatch, fetchRewatchesForShow, logRewatch } from '../lib/rewatches'
+import { deleteRewatch, fetchRewatchesForShow, logRewatch, restoreRewatch } from '../lib/rewatches'
 import { fetchListMembershipForShow } from '../lib/lists'
 import { computeSeasonProgress } from '../lib/seasonProgress'
 import { getCorrectedAirDates, tvmazeEpisodeKey } from '../lib/tvmaze'
@@ -58,17 +60,6 @@ import type {
   WatchedMap,
   WatchlistItem,
 } from '../types'
-
-/** A single generic "you just did something undoable" slot, shown as an
- * UndoToast -- any action (bulk mark-watched, removing from the watchlist,
- * deleting a rewatch, ...) can populate this instead of each needing its own
- * toast state and its own conditional render. Only one undo is offered at a
- * time, which also means a second undoable action naturally supersedes an
- * unactioned earlier one rather than stacking toasts. */
-interface UndoAction {
-  message: string
-  run: () => Promise<void>
-}
 
 export default function ShowDetail() {
   const { id } = useParams<{ id: string }>()
@@ -91,7 +82,7 @@ export default function ShowDetail() {
   const [pickerOpen, setPickerOpen] = useState(false)
   const [startingWatch, setStartingWatch] = useState(false)
   const [started, setStarted] = useState<ShowStarted | null>(null)
-  const [undoAction, setUndoAction] = useState<UndoAction | null>(null)
+  const { toast, showUndo, showError, dismiss } = useToast()
   const [watchlistItem, setWatchlistItem] = useState<WatchlistItem | null>(null)
   const [savingWatchlist, setSavingWatchlist] = useState(false)
   const [rewatches, setRewatches] = useState<ShowRewatch[]>([])
@@ -285,12 +276,21 @@ export default function ShowDetail() {
     const key = watchedKey(activeSeason, episodeNumber)
 
     if (watched[key]) {
+      // Snapshot so a failed unmark can be put back exactly as it was,
+      // instead of the episode staying incorrectly "unwatched" in the UI
+      // while the server still has it marked watched.
+      const previous = watched[key]
       setWatched((prev) => {
         const next = { ...prev }
         delete next[key]
         return next
       })
-      await unmarkWatched(user.id, show.id, activeSeason, episodeNumber)
+      try {
+        await unmarkWatched(user.id, show.id, activeSeason, episodeNumber)
+      } catch {
+        setWatched((prev) => ({ ...prev, [key]: previous }))
+        showError('Failed to unmark this episode. Try again.')
+      }
       return
     }
 
@@ -314,18 +314,27 @@ export default function ShowDetail() {
     }
     setWatched((prev) => ({ ...prev, [key]: optimisticRow }))
 
-    const saved = await markWatched({
-      userId: user.id,
-      showId: show.id,
-      showName: show.name,
-      showPosterPath: show.poster_path,
-      showTotalEpisodes: show.number_of_episodes,
-      seasonNumber: activeSeason,
-      episodeNumber,
-      episodeName,
-      runtimeMinutes,
-    })
-    setWatched((prev) => ({ ...prev, [key]: saved }))
+    try {
+      const saved = await markWatched({
+        userId: user.id,
+        showId: show.id,
+        showName: show.name,
+        showPosterPath: show.poster_path,
+        showTotalEpisodes: show.number_of_episodes,
+        seasonNumber: activeSeason,
+        episodeNumber,
+        episodeName,
+        runtimeMinutes,
+      })
+      setWatched((prev) => ({ ...prev, [key]: saved }))
+    } catch {
+      setWatched((prev) => {
+        const next = { ...prev }
+        delete next[key]
+        return next
+      })
+      showError('Failed to mark this episode watched. Try again.')
+    }
   }
 
   async function handleMarkAllWatched(input: { watchedAt: string; unknownDate: boolean }) {
@@ -364,28 +373,33 @@ export default function ShowDetail() {
     // (this is exactly what silently overwrote real watch dates once) can be
     // undone instead of requiring a manual, error-prone fix.
     const { previousRows, addedKeys } = snapshotBulkTargets(episodes)
-    const saved = await bulkMarkWatched({
-      userId: user.id,
-      showId: show.id,
-      showName: show.name,
-      showPosterPath: show.poster_path,
-      showTotalEpisodes: show.number_of_episodes,
-      episodes,
-      watchedAt: input.watchedAt,
-      watchedAtUnknown: input.unknownDate,
-    })
-    setWatched((prev) => {
-      const next = { ...prev }
-      for (const row of saved) next[watchedKey(row.season_number, row.episode_number)] = row
-      return next
-    })
-    setUndoAction({
-      message:
+    try {
+      const saved = await bulkMarkWatched({
+        userId: user.id,
+        showId: show.id,
+        showName: show.name,
+        showPosterPath: show.poster_path,
+        showTotalEpisodes: show.number_of_episodes,
+        episodes,
+        watchedAt: input.watchedAt,
+        watchedAtUnknown: input.unknownDate,
+      })
+      setWatched((prev) => {
+        const next = { ...prev }
+        for (const row of saved) next[watchedKey(row.season_number, row.episode_number)] = row
+        return next
+      })
+      showUndo(
         previousRows.length > 0
           ? `Marked ${saved.length} episodes watched (${previousRows.length} overwritten)`
           : `Marked ${saved.length} episodes watched`,
-      run: () => undoBulkMark(previousRows, addedKeys),
-    })
+        () => undoBulkMark(previousRows, addedKeys),
+      )
+    } catch {
+      // Nothing was applied locally before this point, so there's nothing
+      // to roll back -- just tell the user the whole batch didn't go through.
+      showError('Failed to mark episodes watched. Try again.')
+    }
   }
 
   /** Splits a batch of (season, episode) targets into ones that already had
@@ -407,23 +421,29 @@ export default function ShowDetail() {
 
   /** Undoes a bulk mark-watched action: restores episodes that were already
    * watched to their exact prior date, and deletes episodes the action
-   * itself created. Passed as the `run` callback on the UndoAction set by
-   * handleMarkAllWatched/handleMarkSeasonWatched below. */
+   * itself created. Passed as the undo callback on the toast set by
+   * handleMarkAllWatched/handleMarkSeasonWatched below -- the toast fires
+   * this without awaiting it, so it owns its own error reporting rather than
+   * letting a failure become a silent unhandled rejection. */
   async function undoBulkMark(
     previousRows: EpisodeWatched[],
     addedKeys: { seasonNumber: number; episodeNumber: number }[],
   ) {
     if (!user || !show) return
-    const [restored] = await Promise.all([
-      restoreWatched(previousRows),
-      addedKeys.length > 0 ? bulkUnmarkWatched(user.id, show.id, addedKeys) : Promise.resolve(),
-    ])
-    setWatched((prev) => {
-      const next = { ...prev }
-      for (const key of addedKeys) delete next[watchedKey(key.seasonNumber, key.episodeNumber)]
-      for (const row of restored) next[watchedKey(row.season_number, row.episode_number)] = row
-      return next
-    })
+    try {
+      const [restored] = await Promise.all([
+        restoreWatched(previousRows),
+        addedKeys.length > 0 ? bulkUnmarkWatched(user.id, show.id, addedKeys) : Promise.resolve(),
+      ])
+      setWatched((prev) => {
+        const next = { ...prev }
+        for (const key of addedKeys) delete next[watchedKey(key.seasonNumber, key.episodeNumber)]
+        for (const row of restored) next[watchedKey(row.season_number, row.episode_number)] = row
+        return next
+      })
+    } catch {
+      showError('Failed to undo. Your watch history wasn’t changed back — try again.')
+    }
   }
 
   /** "Start watching" -- the manual add-to-Now-Watching entry point for a
@@ -448,6 +468,8 @@ export default function ShowDetail() {
         showTotalEpisodes: show.number_of_episodes,
       })
       setStarted(row)
+    } catch {
+      showError('Failed to start watching. Try again.')
     } finally {
       setStartingWatch(false)
     }
@@ -463,17 +485,21 @@ export default function ShowDetail() {
   ) {
     if (!user || !show || activeSeason === null) return
     const key = watchedKey(activeSeason, episodeNumber)
-    const saved = await bulkMarkWatched({
-      userId: user.id,
-      showId: show.id,
-      showName: show.name,
-      showPosterPath: show.poster_path,
-      showTotalEpisodes: show.number_of_episodes,
-      episodes: [{ seasonNumber: activeSeason, episodeNumber, episodeName, runtimeMinutes }],
-      watchedAt: input.watchedAt,
-      watchedAtUnknown: input.unknownDate,
-    })
-    if (saved[0]) setWatched((prev) => ({ ...prev, [key]: saved[0] }))
+    try {
+      const saved = await bulkMarkWatched({
+        userId: user.id,
+        showId: show.id,
+        showName: show.name,
+        showPosterPath: show.poster_path,
+        showTotalEpisodes: show.number_of_episodes,
+        episodes: [{ seasonNumber: activeSeason, episodeNumber, episodeName, runtimeMinutes }],
+        watchedAt: input.watchedAt,
+        watchedAtUnknown: input.unknownDate,
+      })
+      if (saved[0]) setWatched((prev) => ({ ...prev, [key]: saved[0] }))
+    } catch {
+      showError('Failed to mark this episode watched. Try again.')
+    }
   }
 
   async function handleMarkSeasonWatched(input: { watchedAt: string; unknownDate: boolean }) {
@@ -490,28 +516,31 @@ export default function ShowDetail() {
         runtimeMinutes: ep.runtime,
       }))
     const { previousRows, addedKeys } = snapshotBulkTargets(episodes)
-    const saved = await bulkMarkWatched({
-      userId: user.id,
-      showId: show.id,
-      showName: show.name,
-      showPosterPath: show.poster_path,
-      showTotalEpisodes: show.number_of_episodes,
-      episodes,
-      watchedAt: input.watchedAt,
-      watchedAtUnknown: input.unknownDate,
-    })
-    setWatched((prev) => {
-      const next = { ...prev }
-      for (const row of saved) next[watchedKey(row.season_number, row.episode_number)] = row
-      return next
-    })
-    setUndoAction({
-      message:
+    try {
+      const saved = await bulkMarkWatched({
+        userId: user.id,
+        showId: show.id,
+        showName: show.name,
+        showPosterPath: show.poster_path,
+        showTotalEpisodes: show.number_of_episodes,
+        episodes,
+        watchedAt: input.watchedAt,
+        watchedAtUnknown: input.unknownDate,
+      })
+      setWatched((prev) => {
+        const next = { ...prev }
+        for (const row of saved) next[watchedKey(row.season_number, row.episode_number)] = row
+        return next
+      })
+      showUndo(
         previousRows.length > 0
           ? `Marked ${saved.length} episodes watched (${previousRows.length} overwritten)`
           : `Marked ${saved.length} episodes watched`,
-      run: () => undoBulkMark(previousRows, addedKeys),
-    })
+        () => undoBulkMark(previousRows, addedKeys),
+      )
+    } catch {
+      showError('Failed to mark season watched. Try again.')
+    }
   }
 
   /** Toggle for "want to watch", independent of watch progress -- you can
@@ -522,15 +551,21 @@ export default function ShowDetail() {
     setSavingWatchlist(true)
     try {
       if (watchlistItem) {
+        const previous = watchlistItem
         setWatchlistItem(null)
-        await removeFromWatchlist(user.id, show.id)
+        try {
+          await removeFromWatchlist(user.id, show.id)
+        } catch {
+          setWatchlistItem(previous)
+          showError('Failed to remove from watchlist. Try again.')
+          return
+        }
         // A watchlist remove is one accidental tap away from "want to watch"
         // silently vanishing -- offer the same undo affordance bulk
         // mark-watched already gets, instead of making the user re-search
         // and re-add the show from scratch.
-        setUndoAction({
-          message: 'Removed from watchlist',
-          run: async () => {
+        showUndo('Removed from watchlist', async () => {
+          try {
             const saved = await addToWatchlist({
               userId: user.id,
               showId: show.id,
@@ -538,16 +573,22 @@ export default function ShowDetail() {
               showPosterPath: show.poster_path,
             })
             setWatchlistItem(saved)
-          },
+          } catch {
+            showError('Failed to undo. Try adding it to your watchlist again.')
+          }
         })
       } else {
-        const saved = await addToWatchlist({
-          userId: user.id,
-          showId: show.id,
-          showName: show.name,
-          showPosterPath: show.poster_path,
-        })
-        setWatchlistItem(saved)
+        try {
+          const saved = await addToWatchlist({
+            userId: user.id,
+            showId: show.id,
+            showName: show.name,
+            showPosterPath: show.poster_path,
+          })
+          setWatchlistItem(saved)
+        } catch {
+          showError('Failed to add to watchlist. Try again.')
+        }
       }
     } finally {
       setSavingWatchlist(false)
@@ -568,37 +609,66 @@ export default function ShowDetail() {
         showPosterPath: show.poster_path,
       })
       setRewatches((prev) => [saved, ...prev])
+    } catch {
+      showError('Failed to log this rewatch. Try again.')
     } finally {
       setLoggingRewatch(false)
     }
   }
 
   async function handleDeleteRewatch(id: string) {
+    const removed = rewatches.find((r) => r.id === id)
     setRewatches((prev) => prev.filter((r) => r.id !== id))
-    await deleteRewatch(id)
+    try {
+      await deleteRewatch(id)
+    } catch {
+      if (removed) setRewatches((prev) => [removed, ...prev])
+      showError('Failed to remove this rewatch. Try again.')
+      return
+    }
+    if (removed) {
+      // Symmetrical with every other removal in the app -- a rewatch log
+      // entry is just as easy to mis-tap the × on as a watchlist/list item.
+      showUndo('Rewatch removed', async () => {
+        try {
+          const restored = await restoreRewatch(removed)
+          setRewatches((prev) => [restored, ...prev])
+        } catch {
+          showError('Failed to undo. Try logging the rewatch again.')
+        }
+      })
+    }
   }
 
   async function handlePickProvider(p: TmdbProviderListItem) {
     if (!user || !show) return
-    const saved = await setStreamingOverride({
-      showId: show.id,
-      providerId: p.provider_id,
-      providerName: p.provider_name,
-      providerLogoPath: p.logo_path,
-      updatedBy: user.id,
-    })
-    setOverride(saved)
-    setPickerOpen(false)
-    // The poster badges on Home/History/Search read from a cached answer --
-    // without this they'd keep showing the old provider until a hard reload.
-    invalidatePlatformCache(show.id)
+    try {
+      const saved = await setStreamingOverride({
+        showId: show.id,
+        providerId: p.provider_id,
+        providerName: p.provider_name,
+        providerLogoPath: p.logo_path,
+        updatedBy: user.id,
+      })
+      setOverride(saved)
+      setPickerOpen(false)
+      // The poster badges on Home/History/Search read from a cached answer --
+      // without this they'd keep showing the old provider until a hard reload.
+      invalidatePlatformCache(show.id)
+    } catch {
+      showError('Failed to set streaming provider. Try again.')
+    }
   }
 
   async function handleClearOverride() {
     if (!show) return
-    await clearStreamingOverride(show.id)
-    setOverride(null)
-    invalidatePlatformCache(show.id)
+    try {
+      await clearStreamingOverride(show.id)
+      setOverride(null)
+      invalidatePlatformCache(show.id)
+    } catch {
+      showError('Failed to reset streaming provider. Try again.')
+    }
   }
 
   async function handleRateShow(value: number) {
@@ -606,8 +676,14 @@ export default function ShowDetail() {
     setSavingRating(true)
     try {
       if (value === 0) {
+        const previous = showRatings
         setShowRatings((prev) => prev.filter((r) => r.user_id !== user.id))
-        await deleteShowRating(user.id, show.id)
+        try {
+          await deleteShowRating(user.id, show.id)
+        } catch {
+          setShowRatings(previous)
+          showError('Failed to clear your rating. Try again.')
+        }
         return
       }
       const saved = await upsertShowRating({
@@ -621,8 +697,8 @@ export default function ShowDetail() {
         ...prev.filter((r) => r.user_id !== user.id),
         { ...saved, users: { username: user.username } },
       ])
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to save rating.')
+    } catch {
+      showError('Failed to save your rating. Try again.')
     } finally {
       setSavingRating(false)
     }
@@ -636,10 +712,16 @@ export default function ShowDetail() {
     setSavingSeasonRating(true)
     try {
       if (value === 0) {
+        const previous = seasonRatings
         setSeasonRatings((prev) =>
           prev.filter((r) => !(r.user_id === user.id && r.season_number === activeSeason)),
         )
-        await deleteSeasonRating(user.id, show.id, activeSeason)
+        try {
+          await deleteSeasonRating(user.id, show.id, activeSeason)
+        } catch {
+          setSeasonRatings(previous)
+          showError('Failed to clear your season rating. Try again.')
+        }
         return
       }
       const saved = await upsertSeasonRating({
@@ -655,8 +737,8 @@ export default function ShowDetail() {
         ...prev.filter((r) => !(r.user_id === user.id && r.season_number === activeSeason)),
         { ...saved, users: { username: user.username } },
       ])
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to save season rating.')
+    } catch {
+      showError('Failed to save your season rating. Try again.')
     } finally {
       setSavingSeasonRating(false)
     }
@@ -1032,17 +1114,7 @@ export default function ShowDetail() {
         )}
       </div>
 
-      {undoAction && (
-        <UndoToast
-          message={undoAction.message}
-          onUndo={() => {
-            const action = undoAction
-            setUndoAction(null)
-            action.run()
-          }}
-          onDismiss={() => setUndoAction(null)}
-        />
-      )}
+      {toast && <Toast message={toast.message} tone={toast.tone} action={toast.action} onDismiss={dismiss} />}
     </div>
   )
 }
@@ -1092,6 +1164,10 @@ function ProviderPicker({
   const [allProviders, setAllProviders] = useState<TmdbProviderListItem[] | null>(null)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
+
+  // Only ever mounted while open (ShowDetail conditionally renders it) --
+  // so "active" for the whole lifetime of this component instance.
+  useEscapeAndFocusReturn(true, onClose)
 
   useEffect(() => {
     let cancelled = false

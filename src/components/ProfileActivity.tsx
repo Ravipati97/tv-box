@@ -11,7 +11,9 @@ import { posterUrl } from '../lib/tmdb'
 import { dayKey, formatDiaryHeading, formatShortDate } from '../lib/date'
 import { useAuth } from '../contexts/AuthContext'
 import HistorySection from './HistorySection'
-import UndoToast from './UndoToast'
+import Toast from './Toast'
+import { useToast } from '../hooks/useToast'
+import { useEscapeAndFocusReturn } from '../hooks/useEscapeAndFocusReturn'
 import type { EpisodeWatched, ShowListWithCount, ShowRating, WatchlistItem } from '../types'
 
 interface ProfileActivityProps {
@@ -39,7 +41,9 @@ export default function ProfileActivity({ userId, username }: ProfileActivityPro
   const [savingList, setSavingList] = useState(false)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [watchlistUndo, setWatchlistUndo] = useState<WatchlistItem | null>(null)
+  const { toast, showUndo, showError, dismiss } = useToast()
+
+  useEscapeAndFocusReturn(creatingList, () => setCreatingList(false))
 
   useEffect(() => {
     let cancelled = false
@@ -72,21 +76,26 @@ export default function ProfileActivity({ userId, username }: ProfileActivityPro
 
   async function handleRemoveFromWatchlist(item: WatchlistItem) {
     setWatchlist((prev) => prev.filter((w) => w.show_id !== item.show_id))
-    await removeFromWatchlist(userId, item.show_id)
-    setWatchlistUndo(item)
-  }
-
-  async function handleUndoRemoveFromWatchlist() {
-    if (!watchlistUndo) return
-    const item = watchlistUndo
-    setWatchlistUndo(null)
-    const saved = await addToWatchlist({
-      userId,
-      showId: item.show_id,
-      showName: item.show_name,
-      showPosterPath: item.show_poster_path,
+    try {
+      await removeFromWatchlist(userId, item.show_id)
+    } catch {
+      setWatchlist((prev) => [item, ...prev])
+      showError(`Failed to remove ${item.show_name}. Try again.`)
+      return
+    }
+    showUndo(`Removed ${item.show_name} from watchlist`, async () => {
+      try {
+        const saved = await addToWatchlist({
+          userId,
+          showId: item.show_id,
+          showName: item.show_name,
+          showPosterPath: item.show_poster_path,
+        })
+        setWatchlist((prev) => [saved, ...prev])
+      } catch {
+        showError('Failed to undo. Try adding it back manually.')
+      }
     })
-    setWatchlist((prev) => [saved, ...prev])
   }
 
   async function handleCreateList() {
@@ -98,6 +107,8 @@ export default function ProfileActivity({ userId, username }: ProfileActivityPro
       setLists((prev) => [{ ...list, itemCount: 0 }, ...prev])
       setNewListName('')
       setCreatingList(false)
+    } catch {
+      showError('Failed to create list. Try again.')
     } finally {
       setSavingList(false)
     }
@@ -369,13 +380,7 @@ export default function ProfileActivity({ userId, username }: ProfileActivityPro
         </div>
       )}
 
-      {watchlistUndo && (
-        <UndoToast
-          message={`Removed ${watchlistUndo.show_name} from watchlist`}
-          onUndo={handleUndoRemoveFromWatchlist}
-          onDismiss={() => setWatchlistUndo(null)}
-        />
-      )}
+      {toast && <Toast message={toast.message} tone={toast.tone} action={toast.action} onDismiss={dismiss} />}
     </div>
   )
 }

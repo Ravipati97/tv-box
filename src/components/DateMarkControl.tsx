@@ -2,6 +2,7 @@ import { useState } from 'react'
 import type { ReactNode } from 'react'
 import { UNKNOWN_WATCHED_AT } from '../lib/watched'
 import { todayLocalDateInput } from '../lib/date'
+import { useEscapeAndFocusReturn } from '../hooks/useEscapeAndFocusReturn'
 
 /**
  * A small text trigger that expands into a date picker + confirm, so any
@@ -34,6 +35,8 @@ export default function DateMarkControl({
   const [unknownDate, setUnknownDate] = useState(false)
   const [saving, setSaving] = useState(false)
   const today = todayLocalDateInput()
+
+  useEscapeAndFocusReturn(open, () => setOpen(false))
 
   if (!open) {
     return (
