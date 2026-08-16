@@ -29,6 +29,9 @@ export interface TmdbShowDetail {
   number_of_episodes: number
   status: string
   seasons: TmdbSeasonSummary[]
+  /** Fetched via append_to_response=external_ids -- used to cross-reference
+   * this show on TVmaze for a corrected air date, see lib/tvmaze.ts. */
+  external_ids?: { imdb_id: string | null }
 }
 
 export interface TmdbEpisode {

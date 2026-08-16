@@ -1,4 +1,5 @@
 import { getSeasonDetail, getShowDetail } from './tmdb'
+import { getCorrectedAirDates, tvmazeEpisodeKey } from './tvmaze'
 import { isFutureDate } from './date'
 import type { TmdbSeasonSummary } from '../types'
 
@@ -103,11 +104,20 @@ export async function fetchNextEpisode(showId: number, seasonNumber: number): Pr
   if (nextEpisodeCache.has(key)) return nextEpisodeCache.get(key) ?? null
 
   try {
-    const detail = await getSeasonDetail(showId, seasonNumber)
+    const [detail, show] = await Promise.all([
+      getSeasonDetail(showId, seasonNumber),
+      // Just for the IMDb ID -- getShowDetail is cached, so this is a free
+      // hit whenever fetchSeasonBreakdowns has already loaded this show
+      // (which it always has by the time Home calls this, see Home.tsx).
+      getShowDetail(showId).catch(() => null),
+    ])
     const next = detail.episodes.find((ep) => ep.air_date && isFutureDate(ep.air_date))
-    const result: NextEpisode | null = next
-      ? { seasonNumber, episodeNumber: next.episode_number, airDate: next.air_date! }
-      : null
+    let result: NextEpisode | null = null
+    if (next) {
+      const corrected = await getCorrectedAirDates(show?.external_ids?.imdb_id).catch(() => new Map<string, string>())
+      const airDate = corrected.get(tvmazeEpisodeKey(next.season_number, next.episode_number)) ?? next.air_date!
+      result = { seasonNumber, episodeNumber: next.episode_number, airDate }
+    }
     nextEpisodeCache.set(key, result)
     return result
   } catch {

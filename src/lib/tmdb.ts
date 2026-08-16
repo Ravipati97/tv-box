@@ -44,8 +44,22 @@ export async function searchShows(query: string): Promise<TmdbShowSummary[]> {
   return data.results
 }
 
+// Module-level cache: a show's detail (name, seasons, external IDs) never
+// changes within a session, and this ends up fetched twice for the same
+// show on ShowDetail -- once for the page itself, once by lib/tvmaze.ts to
+// look up the show's IMDb ID for its air-date correction. Same pattern as
+// the other session caches in this codebase (seasonCache, platformCache).
+const showDetailCache = new Map<number, TmdbShowDetail>()
+
 export async function getShowDetail(showId: number): Promise<TmdbShowDetail> {
-  return tmdbFetch<TmdbShowDetail>(`/tv/${showId}`)
+  const cached = showDetailCache.get(showId)
+  if (cached) return cached
+  // external_ids (IMDb, TheTVDB, ...) piggybacks on this same request rather
+  // than a separate call -- it's what lets lib/tvmaze.ts cross-reference a
+  // show without a second round trip per page load.
+  const detail = await tmdbFetch<TmdbShowDetail>(`/tv/${showId}`, { append_to_response: 'external_ids' })
+  showDetailCache.set(showId, detail)
+  return detail
 }
 
 export async function getSeasonDetail(

@@ -40,6 +40,7 @@ import { addToWatchlist, fetchWatchlistItem, removeFromWatchlist } from '../lib/
 import { deleteRewatch, fetchRewatchesForShow, logRewatch } from '../lib/rewatches'
 import { fetchListMembershipForShow } from '../lib/lists'
 import { computeSeasonProgress } from '../lib/seasonProgress'
+import { getCorrectedAirDates, tvmazeEpisodeKey } from '../lib/tvmaze'
 import { formatShortDate, isFutureDate } from '../lib/date'
 import { useAuth } from '../contexts/AuthContext'
 import type {
@@ -93,6 +94,7 @@ export default function ShowDetail() {
   const [loggingRewatch, setLoggingRewatch] = useState(false)
   const [listMembership, setListMembership] = useState<Set<string>>(new Set())
   const [listPickerOpen, setListPickerOpen] = useState(false)
+  const [correctedAirDates, setCorrectedAirDates] = useState<Map<string, string>>(new Map())
 
   // Load show detail + my watch progress + everyone's show/season ratings, in parallel.
   useEffect(() => {
@@ -191,6 +193,22 @@ export default function ShowDetail() {
     }
   }, [showId])
 
+  // Air-date correction is also a nice-to-have -- see lib/tvmaze.ts. Waits
+  // on `show` (rather than firing on showId directly) since it needs the
+  // external_ids that come back with the show detail fetch above.
+  useEffect(() => {
+    if (!show) return
+    let cancelled = false
+    getCorrectedAirDates(show.external_ids?.imdb_id)
+      .then((dates) => {
+        if (!cancelled) setCorrectedAirDates(dates)
+      })
+      .catch(() => {})
+    return () => {
+      cancelled = true
+    }
+  }, [show])
+
   const region = useMemo(() => detectRegion(), [])
   const regionProviders = providers?.results[region] ?? null
 
@@ -214,10 +232,16 @@ export default function ShowDetail() {
   // The active season's episode list is already loaded (has air_date), so
   // this is just a client-side scan -- no separate fetch needed the way
   // Home's badge (a different season, not currently open) requires one.
+  // "Is it upcoming" still goes by TMDB's own date (episode ordering never
+  // disagrees between sources, only the exact day) -- only the *displayed*
+  // date gets TVmaze's correction, see lib/tvmaze.ts.
   const nextUpcomingEpisode = useMemo(() => {
     if (!season) return null
-    return season.episodes.find((ep) => ep.air_date && isFutureDate(ep.air_date)) ?? null
-  }, [season])
+    const ep = season.episodes.find((e) => e.air_date && isFutureDate(e.air_date)) ?? null
+    if (!ep) return null
+    const corrected = correctedAirDates.get(tvmazeEpisodeKey(ep.season_number, ep.episode_number))
+    return corrected ? { ...ep, air_date: corrected } : ep
+  }, [season, correctedAirDates])
 
   const myShowRating = useMemo(
     () => showRatings.find((r) => r.user_id === user?.id) ?? null,
@@ -958,7 +982,16 @@ export default function ShowDetail() {
                 : season?.episodes.map((ep) => (
                     <EpisodeRow
                       key={ep.id}
-                      episode={ep}
+                      episode={
+                        ep.air_date
+                          ? {
+                              ...ep,
+                              air_date:
+                                correctedAirDates.get(tvmazeEpisodeKey(ep.season_number, ep.episode_number)) ??
+                                ep.air_date,
+                            }
+                          : ep
+                      }
                       watched={Boolean(watched[watchedKey(ep.season_number, ep.episode_number)])}
                       watchedAt={watched[watchedKey(ep.season_number, ep.episode_number)]?.watched_at ?? null}
                       watchedAtUnknown={Boolean(
