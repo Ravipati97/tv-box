@@ -3,8 +3,9 @@ import { Link, useNavigate, useParams } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import { useAuth } from '../contexts/AuthContext'
 import { fetchUserByUsername } from '../lib/users'
-import { deleteList, fetchList, fetchListItems, removeShowFromList } from '../lib/lists'
+import { addShowToList, deleteList, fetchList, fetchListItems, removeShowFromList } from '../lib/lists'
 import { posterUrl } from '../lib/tmdb'
+import UndoToast from '../components/UndoToast'
 import type { AppUser, ShowList, ShowListItem } from '../types'
 
 export default function ListDetail() {
@@ -16,6 +17,12 @@ export default function ListDetail() {
   const [list, setList] = useState<ShowList | null | undefined>(undefined)
   const [items, setItems] = useState<ShowListItem[]>([])
   const [loading, setLoading] = useState(true)
+  // Deleting a list is permanent and takes every item on it with it -- an
+  // inline "are you sure" step (no native confirm(), same reasoning as
+  // DateMarkControl) is the guard against one mis-tap wiping it out.
+  const [confirmingDelete, setConfirmingDelete] = useState(false)
+  const [deleting, setDeleting] = useState(false)
+  const [removeUndo, setRemoveUndo] = useState<{ message: string; item: ShowListItem } | null>(null)
 
   useEffect(() => {
     if (!username || !listId) return
@@ -48,16 +55,39 @@ export default function ListDetail() {
 
   const isMine = Boolean(me && profile && me.id === profile.id)
 
-  async function handleRemove(showId: number) {
+  async function handleRemove(item: ShowListItem) {
     if (!listId) return
-    setItems((prev) => prev.filter((i) => i.show_id !== showId))
-    await removeShowFromList(listId, showId)
+    setItems((prev) => prev.filter((i) => i.show_id !== item.show_id))
+    await removeShowFromList(listId, item.show_id)
+    // The × button sits right next to the poster with no separate confirm
+    // step, so a mis-tap is easy -- give it the same recoverable undo as
+    // every other removal in the app instead of a silent, permanent drop.
+    setRemoveUndo({ message: `Removed ${item.show_name} from this list`, item })
+  }
+
+  async function handleUndoRemove() {
+    if (!listId || !removeUndo) return
+    const { item } = removeUndo
+    setRemoveUndo(null)
+    const saved = await addShowToList({
+      listId,
+      showId: item.show_id,
+      showName: item.show_name,
+      showPosterPath: item.show_poster_path,
+    })
+    setItems((prev) => [saved, ...prev])
   }
 
   async function handleDeleteList() {
     if (!listId || !username) return
-    await deleteList(listId)
-    navigate(`/u/${username}`)
+    setDeleting(true)
+    try {
+      await deleteList(listId)
+      navigate(`/u/${username}`)
+    } catch {
+      setDeleting(false)
+      setConfirmingDelete(false)
+    }
   }
 
   if (!loading && (profile === null || list === null)) {
@@ -99,15 +129,36 @@ export default function ListDetail() {
                   {items.length} show{items.length === 1 ? '' : 's'}
                 </p>
               </div>
-              {isMine && (
-                <button
-                  type="button"
-                  onClick={handleDeleteList}
-                  className="shrink-0 rounded-lg border border-hairline-strong px-3 py-1.5 text-xs text-base-400 transition-colors duration-200 hover:border-danger/40 hover:text-danger"
-                >
-                  Delete list
-                </button>
-              )}
+              {isMine &&
+                (confirmingDelete ? (
+                  <div className="flex shrink-0 items-center gap-1.5">
+                    <span className="text-xs text-base-500">Delete this list?</span>
+                    <button
+                      type="button"
+                      disabled={deleting}
+                      onClick={handleDeleteList}
+                      className="rounded-lg bg-danger/15 px-2.5 py-1.5 text-xs font-medium text-danger ring-1 ring-danger/40 transition-opacity duration-150 disabled:opacity-60"
+                    >
+                      {deleting ? 'Deleting…' : 'Confirm'}
+                    </button>
+                    <button
+                      type="button"
+                      disabled={deleting}
+                      onClick={() => setConfirmingDelete(false)}
+                      className="text-xs text-base-500 hover:text-base-300"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => setConfirmingDelete(true)}
+                    className="shrink-0 rounded-lg border border-hairline-strong px-3 py-1.5 text-xs text-base-400 transition-colors duration-200 hover:border-danger/40 hover:text-danger"
+                  >
+                    Delete list
+                  </button>
+                ))}
             </div>
 
             {items.length === 0 ? (
@@ -142,7 +193,7 @@ export default function ListDetail() {
                     {isMine && (
                       <button
                         type="button"
-                        onClick={() => handleRemove(item.show_id)}
+                        onClick={() => handleRemove(item)}
                         className="absolute right-1.5 top-1.5 flex h-6 w-6 items-center justify-center rounded-full bg-black/60 text-xs text-white opacity-0 backdrop-blur-sm transition-opacity duration-200 group-hover:opacity-100"
                         aria-label={`Remove ${item.show_name} from this list`}
                       >
@@ -155,6 +206,10 @@ export default function ListDetail() {
             )}
           </>
         )
+      )}
+
+      {removeUndo && (
+        <UndoToast message={removeUndo.message} onUndo={handleUndoRemove} onDismiss={() => setRemoveUndo(null)} />
       )}
     </div>
   )

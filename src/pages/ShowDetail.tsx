@@ -59,14 +59,15 @@ import type {
   WatchlistItem,
 } from '../types'
 
-/** What a bulk mark-watched action changed, so it can be undone -- see
- * UndoToast below. `previousRows` are episodes that were already watched
- * (their exact prior state, to restore); `addedKeys` are episodes that
- * didn't exist before (to delete on undo, not "restore"). */
-interface BulkMarkUndo {
+/** A single generic "you just did something undoable" slot, shown as an
+ * UndoToast -- any action (bulk mark-watched, removing from the watchlist,
+ * deleting a rewatch, ...) can populate this instead of each needing its own
+ * toast state and its own conditional render. Only one undo is offered at a
+ * time, which also means a second undoable action naturally supersedes an
+ * unactioned earlier one rather than stacking toasts. */
+interface UndoAction {
   message: string
-  previousRows: EpisodeWatched[]
-  addedKeys: { seasonNumber: number; episodeNumber: number }[]
+  run: () => Promise<void>
 }
 
 export default function ShowDetail() {
@@ -90,7 +91,7 @@ export default function ShowDetail() {
   const [pickerOpen, setPickerOpen] = useState(false)
   const [startingWatch, setStartingWatch] = useState(false)
   const [started, setStarted] = useState<ShowStarted | null>(null)
-  const [bulkUndo, setBulkUndo] = useState<BulkMarkUndo | null>(null)
+  const [undoAction, setUndoAction] = useState<UndoAction | null>(null)
   const [watchlistItem, setWatchlistItem] = useState<WatchlistItem | null>(null)
   const [savingWatchlist, setSavingWatchlist] = useState(false)
   const [rewatches, setRewatches] = useState<ShowRewatch[]>([])
@@ -293,6 +294,26 @@ export default function ShowDetail() {
       return
     }
 
+    // Optimistic placeholder, swapped for the real row (with its DB id) once
+    // the write resolves -- mirrors the unmark branch above so the same
+    // toggle feels equally instant in both directions, instead of unmarking
+    // being snappy while marking waits on a round trip.
+    const optimisticRow: EpisodeWatched = {
+      id: `optimistic-${key}`,
+      user_id: user.id,
+      show_id: show.id,
+      show_name: show.name,
+      show_poster_path: show.poster_path,
+      show_total_episodes: show.number_of_episodes,
+      season_number: activeSeason,
+      episode_number: episodeNumber,
+      episode_name: episodeName,
+      watched_at: new Date().toISOString(),
+      watched_at_unknown: false,
+      runtime_minutes: runtimeMinutes,
+    }
+    setWatched((prev) => ({ ...prev, [key]: optimisticRow }))
+
     const saved = await markWatched({
       userId: user.id,
       showId: show.id,
@@ -358,13 +379,12 @@ export default function ShowDetail() {
       for (const row of saved) next[watchedKey(row.season_number, row.episode_number)] = row
       return next
     })
-    setBulkUndo({
+    setUndoAction({
       message:
         previousRows.length > 0
           ? `Marked ${saved.length} episodes watched (${previousRows.length} overwritten)`
           : `Marked ${saved.length} episodes watched`,
-      previousRows,
-      addedKeys,
+      run: () => undoBulkMark(previousRows, addedKeys),
     })
   }
 
@@ -385,22 +405,22 @@ export default function ShowDetail() {
     return { previousRows, addedKeys }
   }
 
-  /** Undoes whichever bulk action last ran: restores episodes that were
-   * already watched to their exact prior date, and deletes episodes the
-   * action itself created. */
-  async function handleUndoBulkMark() {
-    if (!bulkUndo || !user || !show) return
-    const snapshot = bulkUndo
-    setBulkUndo(null)
+  /** Undoes a bulk mark-watched action: restores episodes that were already
+   * watched to their exact prior date, and deletes episodes the action
+   * itself created. Passed as the `run` callback on the UndoAction set by
+   * handleMarkAllWatched/handleMarkSeasonWatched below. */
+  async function undoBulkMark(
+    previousRows: EpisodeWatched[],
+    addedKeys: { seasonNumber: number; episodeNumber: number }[],
+  ) {
+    if (!user || !show) return
     const [restored] = await Promise.all([
-      restoreWatched(snapshot.previousRows),
-      snapshot.addedKeys.length > 0
-        ? bulkUnmarkWatched(user.id, show.id, snapshot.addedKeys)
-        : Promise.resolve(),
+      restoreWatched(previousRows),
+      addedKeys.length > 0 ? bulkUnmarkWatched(user.id, show.id, addedKeys) : Promise.resolve(),
     ])
     setWatched((prev) => {
       const next = { ...prev }
-      for (const key of snapshot.addedKeys) delete next[watchedKey(key.seasonNumber, key.episodeNumber)]
+      for (const key of addedKeys) delete next[watchedKey(key.seasonNumber, key.episodeNumber)]
       for (const row of restored) next[watchedKey(row.season_number, row.episode_number)] = row
       return next
     })
@@ -485,13 +505,12 @@ export default function ShowDetail() {
       for (const row of saved) next[watchedKey(row.season_number, row.episode_number)] = row
       return next
     })
-    setBulkUndo({
+    setUndoAction({
       message:
         previousRows.length > 0
           ? `Marked ${saved.length} episodes watched (${previousRows.length} overwritten)`
           : `Marked ${saved.length} episodes watched`,
-      previousRows,
-      addedKeys,
+      run: () => undoBulkMark(previousRows, addedKeys),
     })
   }
 
@@ -505,6 +524,22 @@ export default function ShowDetail() {
       if (watchlistItem) {
         setWatchlistItem(null)
         await removeFromWatchlist(user.id, show.id)
+        // A watchlist remove is one accidental tap away from "want to watch"
+        // silently vanishing -- offer the same undo affordance bulk
+        // mark-watched already gets, instead of making the user re-search
+        // and re-add the show from scratch.
+        setUndoAction({
+          message: 'Removed from watchlist',
+          run: async () => {
+            const saved = await addToWatchlist({
+              userId: user.id,
+              showId: show.id,
+              showName: show.name,
+              showPosterPath: show.poster_path,
+            })
+            setWatchlistItem(saved)
+          },
+        })
       } else {
         const saved = await addToWatchlist({
           userId: user.id,
@@ -997,11 +1032,15 @@ export default function ShowDetail() {
         )}
       </div>
 
-      {bulkUndo && (
+      {undoAction && (
         <UndoToast
-          message={bulkUndo.message}
-          onUndo={handleUndoBulkMark}
-          onDismiss={() => setBulkUndo(null)}
+          message={undoAction.message}
+          onUndo={() => {
+            const action = undoAction
+            setUndoAction(null)
+            action.run()
+          }}
+          onDismiss={() => setUndoAction(null)}
         />
       )}
     </div>

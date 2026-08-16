@@ -1,4 +1,4 @@
-import { lazy, Suspense, useState } from 'react'
+import { lazy, Suspense, useEffect, useState } from 'react'
 import type { ReactNode } from 'react'
 import { HashRouter, Navigate, Route, Routes, useLocation } from 'react-router-dom'
 import { AnimatePresence } from 'framer-motion'
@@ -46,6 +46,17 @@ function AppShell() {
   const location = useLocation()
   const showNav = Boolean(user) && location.pathname !== '/login'
   const [gatePassed, setGatePassed] = useState(hasPassedGate)
+
+  // Tapping a nav item (bottom tab bar on mobile, top bar on desktop) should
+  // always land on the top of the destination page, the same way a fresh
+  // page load would -- without this, navigating away from partway down a
+  // long list (e.g. Home's show grid) leaves the next page's header and top
+  // content scrolled off-screen until the user manually scrolls up. Keyed on
+  // pathname (matching the Routes key below) so it fires on every real page
+  // change but not on e.g. query-param-only updates within the same page.
+  useEffect(() => {
+    window.scrollTo(0, 0)
+  }, [location.pathname])
 
   if (loading) {
     return (

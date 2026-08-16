@@ -16,6 +16,7 @@ import HistorySection from '../components/HistorySection'
 import ActivityRow from '../components/ActivityRow'
 import SeasonProgressBar from '../components/SeasonProgressBar'
 import StreamingBadge from '../components/StreamingBadge'
+import { ShowGridSkeleton } from '../components/Skeletons'
 import type { EpisodeWatched, ShowRating, ShowStarted } from '../types'
 
 function greeting(): string {
@@ -179,15 +180,7 @@ export default function Home() {
       {error && <p className="mb-4 text-sm text-danger">{error}</p>}
 
       {loading ? (
-        <div className="grid grid-cols-2 gap-x-4 gap-y-6 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
-          {Array.from({ length: 5 }).map((_, i) => (
-            <div key={i} className="animate-pulse">
-              <div className="aspect-[2/3] rounded-2xl bg-base-800" />
-              <div className="mt-2 h-3.5 w-3/4 rounded bg-base-800" />
-              <div className="mt-1.5 h-1.5 w-full rounded-full bg-base-800" />
-            </div>
-          ))}
-        </div>
+        <ShowGridSkeleton count={5} progress />
       ) : watching.length === 0 ? (
         <div className="mt-4 flex flex-col items-center rounded-2xl border border-hairline bg-base-850/40 px-6 py-14 text-center">
           <div className="mb-3 text-4xl">📺</div>

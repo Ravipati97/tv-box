@@ -5,12 +5,13 @@ import { motion } from 'framer-motion'
 import { fetchRecentShowRatings } from '../lib/showRatings'
 import { fetchRecentWatched } from '../lib/watched'
 import { summarizeShowActivity, watchHistory } from '../lib/showActivity'
-import { fetchWatchlist, removeFromWatchlist } from '../lib/watchlist'
+import { addToWatchlist, fetchWatchlist, removeFromWatchlist } from '../lib/watchlist'
 import { createList, fetchListsForUser } from '../lib/lists'
 import { posterUrl } from '../lib/tmdb'
 import { dayKey, formatDiaryHeading, formatShortDate } from '../lib/date'
 import { useAuth } from '../contexts/AuthContext'
 import HistorySection from './HistorySection'
+import UndoToast from './UndoToast'
 import type { EpisodeWatched, ShowListWithCount, ShowRating, WatchlistItem } from '../types'
 
 interface ProfileActivityProps {
@@ -38,6 +39,7 @@ export default function ProfileActivity({ userId, username }: ProfileActivityPro
   const [savingList, setSavingList] = useState(false)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [watchlistUndo, setWatchlistUndo] = useState<WatchlistItem | null>(null)
 
   useEffect(() => {
     let cancelled = false
@@ -68,9 +70,23 @@ export default function ProfileActivity({ userId, username }: ProfileActivityPro
     }
   }, [userId])
 
-  async function handleRemoveFromWatchlist(showId: number) {
-    setWatchlist((prev) => prev.filter((w) => w.show_id !== showId))
-    await removeFromWatchlist(userId, showId)
+  async function handleRemoveFromWatchlist(item: WatchlistItem) {
+    setWatchlist((prev) => prev.filter((w) => w.show_id !== item.show_id))
+    await removeFromWatchlist(userId, item.show_id)
+    setWatchlistUndo(item)
+  }
+
+  async function handleUndoRemoveFromWatchlist() {
+    if (!watchlistUndo) return
+    const item = watchlistUndo
+    setWatchlistUndo(null)
+    const saved = await addToWatchlist({
+      userId,
+      showId: item.show_id,
+      showName: item.show_name,
+      showPosterPath: item.show_poster_path,
+    })
+    setWatchlist((prev) => [saved, ...prev])
   }
 
   async function handleCreateList() {
@@ -261,7 +277,7 @@ export default function ProfileActivity({ userId, username }: ProfileActivityPro
                 {isMe && (
                   <button
                     type="button"
-                    onClick={() => handleRemoveFromWatchlist(w.show_id)}
+                    onClick={() => handleRemoveFromWatchlist(w)}
                     className="shrink-0 text-xs text-base-500 hover:text-danger"
                   >
                     Remove
@@ -276,7 +292,13 @@ export default function ProfileActivity({ userId, username }: ProfileActivityPro
           {isMe && (
             <div className="mb-4">
               {creatingList ? (
-                <div className="flex items-center gap-1.5">
+                <form
+                  onSubmit={(e) => {
+                    e.preventDefault()
+                    handleCreateList()
+                  }}
+                  className="flex items-center gap-1.5"
+                >
                   <input
                     autoFocus
                     type="text"
@@ -286,9 +308,8 @@ export default function ProfileActivity({ userId, username }: ProfileActivityPro
                     className="w-full max-w-xs rounded-lg border border-hairline-strong bg-base-900 px-2.5 py-1.5 text-xs text-base-200 placeholder:text-base-600"
                   />
                   <button
-                    type="button"
+                    type="submit"
                     disabled={!newListName.trim() || savingList}
-                    onClick={handleCreateList}
                     className="shrink-0 rounded-lg bg-accent-500/15 px-2.5 py-1.5 text-xs font-medium text-accent-300 ring-1 ring-accent-500/40 disabled:opacity-50"
                   >
                     Create
@@ -300,7 +321,7 @@ export default function ProfileActivity({ userId, username }: ProfileActivityPro
                   >
                     Cancel
                   </button>
-                </div>
+                </form>
               ) : (
                 <button
                   type="button"
@@ -346,6 +367,14 @@ export default function ProfileActivity({ userId, username }: ProfileActivityPro
             </ul>
           )}
         </div>
+      )}
+
+      {watchlistUndo && (
+        <UndoToast
+          message={`Removed ${watchlistUndo.show_name} from watchlist`}
+          onUndo={handleUndoRemoveFromWatchlist}
+          onDismiss={() => setWatchlistUndo(null)}
+        />
       )}
     </div>
   )
