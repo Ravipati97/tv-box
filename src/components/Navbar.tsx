@@ -1,4 +1,4 @@
-import { NavLink } from 'react-router-dom'
+import { NavLink, useLocation } from 'react-router-dom'
 import { AnimatePresence, motion } from 'framer-motion'
 import { useTheme } from '../contexts/ThemeContext'
 
@@ -150,12 +150,28 @@ const NAV_ITEMS = [
 ] as const
 
 export default function Navbar() {
+  const location = useLocation()
+
+  // React Router doesn't fire a navigation (no new history entry, no
+  // location change) when a Link targets the route you're already on -- so
+  // neither useScrollRestoration's location-keyed effect nor a plain
+  // location.pathname effect ever runs for "tap the tab you're already on."
+  // That's exactly the common case this was meant to cover (scrolled deep
+  // into Home's grid, tap Home again to jump back to the top), so it needs
+  // its own explicit handling here rather than relying on route-change
+  // effects at all.
+  function handleNavClick(to: string) {
+    if (location.pathname === to) {
+      window.scrollTo(0, 0)
+    }
+  }
+
   return (
     <>
       {/* Top bar (always visible) */}
       <header className="sticky top-0 z-40 border-b border-hairline bg-base-950/80 backdrop-blur-md">
         <div className="mx-auto flex max-w-5xl items-center justify-between px-4 py-3 sm:px-6">
-          <NavLink to="/home" className="flex items-center gap-2">
+          <NavLink to="/home" onClick={() => handleNavClick('/home')} className="flex items-center gap-2">
             <svg width="24" height="24" viewBox="0 0 32 32" fill="none">
               <rect width="32" height="32" rx="8" fill="var(--color-accent-500)" />
               <rect x="6" y="9" width="20" height="14" rx="3" fill="var(--color-base-950)" />
@@ -172,6 +188,7 @@ export default function Navbar() {
                 <NavLink
                   key={to}
                   to={to}
+                  onClick={() => handleNavClick(to)}
                   className={({ isActive }) =>
                     `${linkBase} ${
                       isActive
@@ -212,6 +229,7 @@ export default function Navbar() {
           <NavLink
             key={to}
             to={to}
+            onClick={() => handleNavClick(to)}
             className={({ isActive }) =>
               `${linkBase} flex-1 py-2.5 ${isActive ? 'text-accent-400' : 'text-base-400'}`
             }
