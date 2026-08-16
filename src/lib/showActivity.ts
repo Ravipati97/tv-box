@@ -1,4 +1,12 @@
-import type { EpisodeWatched, EpisodeWatchedWithUser, ShowRating, ShowRatingWithUser, ShowStarted } from '../types'
+import { dayKey } from './date'
+import type {
+  EpisodeWatched,
+  EpisodeWatchedWithUser,
+  ShowRating,
+  ShowRatingWithUser,
+  ShowRewatch,
+  ShowStarted,
+} from '../types'
 
 /** Per-show rollup combining a rating (if any) with watch progress (if any). */
 export interface ShowActivity {
@@ -151,6 +159,138 @@ export function sortHistory(entries: ShowActivity[], sort: HistorySort): ShowAct
     })
   }
   return sorted
+}
+
+// --- Personal diary (one user's own dated log, most recent first) ---
+
+export type DiaryEntryKind = 'watched' | 'rated' | 'rewatched'
+
+/** One diary-worthy, personally-dated event. `watched` entries are grouped
+ * per show per calendar day (see buildDiaryEntries) -- a 6-episode binge
+ * session is one entry, not six, the same granularity every other
+ * show-level view in this app already uses. */
+export interface DiaryEntry {
+  id: string
+  kind: DiaryEntryKind
+  showId: number
+  showName: string
+  showPosterPath: string | null
+  /** ISO timestamp used for sorting -- empty string for undated entries
+   * (see buildUndatedDiaryEntries), which are never mixed into the sorted
+   * list this drives. */
+  at: string
+  rating?: number
+  episodeCount?: number
+  /** Only set when episodeCount > 1 -- a single-episode entry shows
+   * episodeLabel (the specific episode) instead. */
+  seasonLabel?: string
+  /** Only set when episodeCount === 1 -- e.g. "S2E4 · Man of the People". */
+  episodeLabel?: string
+}
+
+function seasonLabelFor(seasonNumbers: number[]): string {
+  const sorted = Array.from(new Set(seasonNumbers)).sort((a, b) => a - b)
+  if (sorted.length === 1) return `Season ${sorted[0]}`
+  return `S${sorted[0]}–S${sorted[sorted.length - 1]}`
+}
+
+/**
+ * Merges one user's ratings, watched episodes, and rewatches into a single
+ * reverse-chronological diary -- the same idea as a film-tracking diary,
+ * just at "episode(s) of a show, in one sitting" granularity for TV.
+ * Excludes watched rows with no real date (watched_at_unknown) -- a diary
+ * is fundamentally date-ordered, so those live in buildUndatedDiaryEntries
+ * instead rather than being silently dropped.
+ */
+export function buildDiaryEntries(
+  ratings: ShowRating[],
+  watched: EpisodeWatched[],
+  rewatches: ShowRewatch[],
+): DiaryEntry[] {
+  const entries: DiaryEntry[] = []
+
+  for (const r of ratings) {
+    entries.push({
+      id: `rated-${r.id}`,
+      kind: 'rated',
+      showId: r.show_id,
+      showName: r.show_name,
+      showPosterPath: r.show_poster_path,
+      at: r.rated_at,
+      rating: r.rating,
+    })
+  }
+
+  for (const rw of rewatches) {
+    entries.push({
+      id: `rewatched-${rw.id}`,
+      kind: 'rewatched',
+      showId: rw.show_id,
+      showName: rw.show_name,
+      showPosterPath: rw.show_poster_path,
+      at: rw.rewatched_at,
+    })
+  }
+
+  const watchedGroups = new Map<string, EpisodeWatched[]>()
+  for (const w of watched) {
+    if (w.watched_at_unknown) continue
+    const key = `${w.show_id}-${dayKey(w.watched_at)}`
+    const list = watchedGroups.get(key)
+    if (list) list.push(w)
+    else watchedGroups.set(key, [w])
+  }
+  for (const rows of watchedGroups.values()) {
+    // Latest episode in the group stands in for the whole entry's timestamp
+    // and poster/name -- so a same-day binge still sorts correctly against
+    // a rating or rewatch logged the same day.
+    const latest = rows.reduce((a, b) => (b.watched_at > a.watched_at ? b : a))
+    entries.push({
+      id: `watched-${latest.show_id}-${dayKey(latest.watched_at)}`,
+      kind: 'watched',
+      showId: latest.show_id,
+      showName: latest.show_name,
+      showPosterPath: latest.show_poster_path,
+      at: latest.watched_at,
+      episodeCount: rows.length,
+      seasonLabel: rows.length > 1 ? seasonLabelFor(rows.map((r) => r.season_number)) : undefined,
+      episodeLabel:
+        rows.length === 1
+          ? `S${latest.season_number}E${latest.episode_number}${latest.episode_name ? ` · ${latest.episode_name}` : ''}`
+          : undefined,
+    })
+  }
+
+  entries.sort((a, b) => b.at.localeCompare(a.at))
+  return entries
+}
+
+/** Watched episodes with no real date ("watched a while ago") -- can't be
+ * placed in a dated diary, so they're grouped by show only (no day
+ * grouping possible) and surfaced separately rather than silently
+ * vanishing from the diary entirely. */
+export function buildUndatedDiaryEntries(watched: EpisodeWatched[]): DiaryEntry[] {
+  const groups = new Map<number, EpisodeWatched[]>()
+  for (const w of watched) {
+    if (!w.watched_at_unknown) continue
+    const list = groups.get(w.show_id)
+    if (list) list.push(w)
+    else groups.set(w.show_id, [w])
+  }
+  return Array.from(groups.values())
+    .map((rows) => ({
+      id: `watched-undated-${rows[0].show_id}`,
+      kind: 'watched' as const,
+      showId: rows[0].show_id,
+      showName: rows[0].show_name,
+      showPosterPath: rows[0].show_poster_path,
+      at: '',
+      episodeCount: rows.length,
+      seasonLabel: rows.length > 1 ? seasonLabelFor(rows.map((r) => r.season_number)) : undefined,
+      episodeLabel:
+        rows.length === 1 ? `S${rows[0].season_number}E${rows[0].episode_number}` : undefined,
+    }))
+    .sort((a, b) => a.showName.localeCompare(b.showName))
 }
 
 // --- Group activity feed (every member's ratings/finishes, merged) ---

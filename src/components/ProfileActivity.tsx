@@ -4,7 +4,9 @@ import { Link } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import { fetchRecentShowRatings } from '../lib/showRatings'
 import { fetchRecentWatched } from '../lib/watched'
-import { summarizeShowActivity, watchHistory } from '../lib/showActivity'
+import { fetchRecentRewatches } from '../lib/rewatches'
+import { buildDiaryEntries, buildUndatedDiaryEntries, summarizeShowActivity, watchHistory } from '../lib/showActivity'
+import type { DiaryEntry } from '../lib/showActivity'
 import { addToWatchlist, fetchWatchlist, removeFromWatchlist } from '../lib/watchlist'
 import { createList, fetchListsForUser } from '../lib/lists'
 import { posterUrl } from '../lib/tmdb'
@@ -14,16 +16,16 @@ import HistorySection from './HistorySection'
 import Toast from './Toast'
 import { useToast } from '../hooks/useToast'
 import { useEscapeAndFocusReturn } from '../hooks/useEscapeAndFocusReturn'
-import type { EpisodeWatched, ShowListWithCount, ShowRating, WatchlistItem } from '../types'
+import type { EpisodeWatched, ShowListWithCount, ShowRating, ShowRewatch, WatchlistItem } from '../types'
 
 interface ProfileActivityProps {
   userId: string
   username: string
 }
 
-interface DiaryGroup {
+interface DiaryDayGroup {
   heading: string
-  items: ShowRating[]
+  entries: DiaryEntry[]
 }
 
 type Tab = 'diary' | 'history' | 'watchlist' | 'lists'
@@ -34,6 +36,7 @@ export default function ProfileActivity({ userId, username }: ProfileActivityPro
   const [tab, setTab] = useState<Tab>('diary')
   const [ratings, setRatings] = useState<ShowRating[]>([])
   const [watched, setWatched] = useState<EpisodeWatched[]>([])
+  const [rewatches, setRewatches] = useState<ShowRewatch[]>([])
   const [watchlist, setWatchlist] = useState<WatchlistItem[]>([])
   const [lists, setLists] = useState<ShowListWithCount[]>([])
   const [creatingList, setCreatingList] = useState(false)
@@ -52,13 +55,15 @@ export default function ProfileActivity({ userId, username }: ProfileActivityPro
     Promise.all([
       fetchRecentShowRatings(userId, 2000),
       fetchRecentWatched(userId, 2000),
+      fetchRecentRewatches(userId, 2000),
       fetchWatchlist(userId),
       fetchListsForUser(userId),
     ])
-      .then(([ratingRows, watchedRows, watchlistRows, listRows]) => {
+      .then(([ratingRows, watchedRows, rewatchRows, watchlistRows, listRows]) => {
         if (!cancelled) {
           setRatings(ratingRows)
           setWatched(watchedRows)
+          setRewatches(rewatchRows)
           setWatchlist(watchlistRows)
           setLists(listRows)
         }
@@ -126,22 +131,27 @@ export default function ProfileActivity({ userId, username }: ProfileActivityPro
     return { totalShows, finished, episodesWatched: watched.length, avg, hoursWatched }
   }, [ratings, watched, activity])
 
-  // Ratings already arrive sorted newest-first, so grouping is just "start a
-  // new bucket whenever the calendar day changes".
-  const diaryGroups = useMemo<DiaryGroup[]>(() => {
-    const groups: DiaryGroup[] = []
+  // Every dated, personally-loggable event (watched, rated, rewatched)
+  // merged into one timeline -- see buildDiaryEntries. Already sorted
+  // newest-first, so grouping is just "start a new bucket whenever the
+  // calendar day changes."
+  const diaryEntries = useMemo(() => buildDiaryEntries(ratings, watched, rewatches), [ratings, watched, rewatches])
+  const undatedDiaryEntries = useMemo(() => buildUndatedDiaryEntries(watched), [watched])
+
+  const diaryGroups = useMemo<DiaryDayGroup[]>(() => {
+    const groups: DiaryDayGroup[] = []
     let currentKey = ''
-    for (const r of ratings) {
-      const key = dayKey(r.rated_at)
+    for (const entry of diaryEntries) {
+      const key = dayKey(entry.at)
       if (key !== currentKey) {
-        groups.push({ heading: formatDiaryHeading(r.rated_at), items: [r] })
+        groups.push({ heading: formatDiaryHeading(entry.at), entries: [entry] })
         currentKey = key
       } else {
-        groups[groups.length - 1].items.push(r)
+        groups[groups.length - 1].entries.push(entry)
       }
     }
     return groups
-  }, [ratings])
+  }, [diaryEntries])
 
   const history = useMemo(() => watchHistory(activity), [activity])
 
@@ -179,11 +189,11 @@ export default function ProfileActivity({ userId, username }: ProfileActivityPro
           ))}
         </div>
       ) : tab === 'diary' ? (
-        ratings.length === 0 ? (
+        diaryGroups.length === 0 && undatedDiaryEntries.length === 0 ? (
           <div className="mt-10 flex flex-col items-center text-center">
-            <div className="mb-3 text-4xl">⭐</div>
+            <div className="mb-3 text-4xl">📔</div>
             <p className="text-sm text-base-500">
-              No ratings yet.{' '}
+              Nothing logged yet. Mark an episode watched or rate a show, and it'll show up here.{' '}
               <Link to="/search" className="text-accent-400 hover:underline">
                 Find a show
               </Link>{' '}
@@ -193,47 +203,30 @@ export default function ProfileActivity({ userId, username }: ProfileActivityPro
         ) : (
           <div className="space-y-6">
             {diaryGroups.map((group) => (
-              <div key={group.heading + group.items[0].id}>
+              <div key={group.heading + group.entries[0].id}>
                 <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-base-500">
                   {group.heading}
                 </h3>
                 <ul className="space-y-2">
-                  {group.items.map((r, i) => (
-                    <motion.li
-                      key={r.id}
-                      initial={{ opacity: 0, y: 6 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      transition={{ duration: 0.25, delay: Math.min(i, 8) * 0.02 }}
-                    >
-                      <Link
-                        to={`/show/${r.show_id}`}
-                        className="flex items-center gap-3 rounded-xl border border-hairline bg-base-850/60 p-2.5 transition-colors duration-200 hover:bg-base-800/70"
-                      >
-                        <div className="h-14 w-10 shrink-0 overflow-hidden rounded-md bg-base-800">
-                          {r.show_poster_path && (
-                            <img
-                              src={posterUrl(r.show_poster_path, 'w185') ?? undefined}
-                              alt=""
-                              loading="lazy"
-                              decoding="async"
-                              className="h-full w-full object-cover"
-                            />
-                          )}
-                        </div>
-                        <div className="min-w-0 flex-1">
-                          <p className="truncate text-sm font-medium text-base-100">{r.show_name}</p>
-                          <p className="text-xs text-base-400">Rated</p>
-                        </div>
-                        <div className="flex shrink-0 items-center gap-1 text-sm font-semibold text-star">
-                          {r.rating.toFixed(1)}
-                          <StarGlyph />
-                        </div>
-                      </Link>
-                    </motion.li>
+                  {group.entries.map((entry, i) => (
+                    <DiaryRow key={entry.id} entry={entry} index={i} />
                   ))}
                 </ul>
               </div>
             ))}
+
+            {undatedDiaryEntries.length > 0 && (
+              <div>
+                <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-base-500">
+                  Date unknown
+                </h3>
+                <ul className="space-y-2">
+                  {undatedDiaryEntries.map((entry, i) => (
+                    <DiaryRow key={entry.id} entry={entry} index={i} />
+                  ))}
+                </ul>
+              </div>
+            )}
           </div>
         )
       ) : tab === 'history' ? (
@@ -416,10 +409,112 @@ function StatCard({ label, value }: { label: string; value: string | number }) {
   )
 }
 
+/** One row in the diary -- shape (poster, name, link) is shared across all
+ * three entry kinds; only the subtitle and the right-side badge differ. */
+function DiaryRow({ entry, index }: { entry: DiaryEntry; index: number }) {
+  return (
+    <motion.li
+      initial={{ opacity: 0, y: 6 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.25, delay: Math.min(index, 8) * 0.02 }}
+    >
+      <Link
+        to={`/show/${entry.showId}`}
+        className="flex items-center gap-3 rounded-xl border border-hairline bg-base-850/60 p-2.5 transition-colors duration-200 hover:bg-base-800/70"
+      >
+        <div className="h-14 w-10 shrink-0 overflow-hidden rounded-md bg-base-800">
+          {entry.showPosterPath && (
+            <img
+              src={posterUrl(entry.showPosterPath, 'w185') ?? undefined}
+              alt=""
+              loading="lazy"
+              decoding="async"
+              className="h-full w-full object-cover"
+            />
+          )}
+        </div>
+        <div className="min-w-0 flex-1">
+          <p className="truncate text-sm font-medium text-base-100">{entry.showName}</p>
+          <p className="flex items-center gap-1 text-xs text-base-400">
+            {entry.kind === 'rated' && 'Rated'}
+            {entry.kind === 'rewatched' && (
+              <>
+                <RewatchGlyph />
+                Rewatched
+              </>
+            )}
+            {entry.kind === 'watched' && (
+              <>
+                <WatchedGlyph />
+                {entry.episodeLabel ? (
+                  <>Watched {entry.episodeLabel}</>
+                ) : (
+                  <>
+                    Watched {entry.episodeCount} episode{entry.episodeCount === 1 ? '' : 's'}
+                    {entry.seasonLabel ? ` · ${entry.seasonLabel}` : ''}
+                  </>
+                )}
+              </>
+            )}
+          </p>
+        </div>
+        {entry.kind === 'rated' && entry.rating != null && (
+          <div className="flex shrink-0 items-center gap-1 text-sm font-semibold text-star">
+            {entry.rating.toFixed(1)}
+            <StarGlyph />
+          </div>
+        )}
+        {entry.kind === 'watched' && (entry.episodeCount ?? 0) > 1 && (
+          <div className="shrink-0 rounded-full bg-hover-strong px-2 py-0.5 text-[11px] font-medium text-base-400">
+            ×{entry.episodeCount}
+          </div>
+        )}
+      </Link>
+    </motion.li>
+  )
+}
+
 function StarGlyph() {
   return (
     <svg width="12" height="12" viewBox="0 0 24 24" fill="var(--color-star)">
       <path d="M12 2.5l2.9 6.15 6.6.72-4.95 4.6 1.3 6.53L12 17.3l-5.85 3.2 1.3-6.53-4.95-4.6 6.6-.72L12 2.5z" />
+    </svg>
+  )
+}
+
+function WatchedGlyph() {
+  return (
+    <svg
+      width="11"
+      height="11"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="var(--color-accent-400)"
+      strokeWidth="2.5"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className="shrink-0"
+    >
+      <path d="M5 12.5l4.5 4.5L19 7" />
+    </svg>
+  )
+}
+
+function RewatchGlyph() {
+  return (
+    <svg
+      width="11"
+      height="11"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="var(--color-accent-400)"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className="shrink-0"
+    >
+      <path d="M4 12a8 8 0 0 1 14-5.3M20 12a8 8 0 0 1-14 5.3" />
+      <path d="M18 4v4h-4M6 20v-4h4" />
     </svg>
   )
 }
