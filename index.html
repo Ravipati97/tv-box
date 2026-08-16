@@ -17,6 +17,18 @@
                 ? 'light'
                 : 'dark'
           document.documentElement.classList.add(theme)
+          // iOS reads whatever this link's href is at the moment someone
+          // taps "Add to Home Screen" -- Safari doesn't yet act on the
+          // media="(prefers-color-scheme: ...)" variants declared below on
+          // its own (as of iOS 26), so this sets the right one manually
+          // using the same resolved theme as the page itself. Note this
+          // only affects icons added *after* this shipped -- iOS caches the
+          // icon at add-time and won't swap it if the system theme changes
+          // later; removing and re-adding the shortcut picks up the change.
+          if (theme === 'light') {
+            var icon = document.getElementById('apple-touch-icon')
+            if (icon) icon.setAttribute('href', '/apple-touch-icon-light.png')
+          }
         } catch (e) {
           document.documentElement.classList.add('dark')
         }
@@ -27,8 +39,13 @@
          needs a raster apple-touch-icon) -- without this it falls back to a
          screenshot of the page as the home screen icon instead of the
          actual logo. 180x180 covers current devices; the smaller sizes are
-         for older iPads/iPhones that still ask for them explicitly. -->
-    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+         for older iPads/iPhones that still ask for them explicitly. The
+         id="apple-touch-icon" one is the one the boot script above swaps
+         between light/dark; the media-queried pair below is the
+         spec-correct declaration for browsers that do honor it. -->
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" id="apple-touch-icon" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" media="(prefers-color-scheme: dark)" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon-light.png" media="(prefers-color-scheme: light)" />
     <link rel="apple-touch-icon" sizes="152x152" href="/apple-touch-icon-152x152.png" />
     <link rel="apple-touch-icon" sizes="167x167" href="/apple-touch-icon-167x167.png" />
     <link rel="apple-touch-icon" sizes="120x120" href="/apple-touch-icon-120x120.png" />

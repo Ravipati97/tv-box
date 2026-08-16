@@ -1,0 +1,54 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024">
+  <defs>
+    <!-- Colors below are the app's own dark-theme tokens (index.css):
+         accent-400/500/600 for the background, base-950 for the screen,
+         and the star color for the play glyph. -->
+    <linearGradient id="bg" x1="0" y1="0" x2="1024" y2="1024" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#a78bfa"/>
+      <stop offset="0.5" stop-color="#8b5cf6"/>
+      <stop offset="1" stop-color="#7c3aed"/>
+    </linearGradient>
+    <radialGradient id="sheen" cx="0.3" cy="0.2" r="0.8" gradientUnits="objectBoundingBox">
+      <stop offset="0" stop-color="#ffffff" stop-opacity="0.28"/>
+      <stop offset="0.55" stop-color="#ffffff" stop-opacity="0.05"/>
+      <stop offset="1" stop-color="#ffffff" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="screen" x1="180" y1="270" x2="844" y2="754" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#18182a"/>
+      <stop offset="1" stop-color="#08080c"/>
+    </linearGradient>
+    <linearGradient id="screenTopHighlight" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#ffffff" stop-opacity="0.10"/>
+      <stop offset="1" stop-color="#ffffff" stop-opacity="0"/>
+    </linearGradient>
+    <radialGradient id="playGlow" cx="512" cy="512" r="260" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#ffb020" stop-opacity="0.4"/>
+      <stop offset="1" stop-color="#ffb020" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="play" x1="412" y1="382" x2="642" y2="642" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#ffc857"/>
+      <stop offset="0.5" stop-color="#ffb020"/>
+      <stop offset="1" stop-color="#e07f00"/>
+    </linearGradient>
+    <clipPath id="playClip">
+      <path d="M412 382L642 512L412 642Z"/>
+    </clipPath>
+    <filter id="blurM" x="-60%" y="-60%" width="220%" height="220%">
+      <feGaussianBlur stdDeviation="16"/>
+    </filter>
+  </defs>
+
+  <!-- Full-bleed background, no baked-in corner radius: iOS applies its own mask -->
+  <rect width="1024" height="1024" fill="url(#bg)"/>
+  <rect width="1024" height="1024" fill="url(#sheen)"/>
+
+  <!-- TV screen -->
+  <rect x="180" y="270" width="664" height="484" rx="76" fill="url(#screen)"/>
+  <rect x="180" y="270" width="664" height="240" rx="76" fill="url(#screenTopHighlight)"/>
+  <rect x="180.5" y="270.5" width="663" height="483" rx="75.5" fill="none" stroke="#ffffff" stroke-opacity="0.07" stroke-width="1.5"/>
+
+  <!-- Play glyph, glowing on the screen -->
+  <circle cx="512" cy="512" r="260" fill="url(#playGlow)"/>
+  <path d="M412 382L642 512L412 642Z" fill="url(#play)"/>
+  <ellipse cx="470" cy="435" rx="34" ry="22" fill="#ffffff" opacity="0.32" filter="url(#blurM)" clip-path="url(#playClip)"/>
+</svg>
