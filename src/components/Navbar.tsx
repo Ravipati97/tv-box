@@ -194,12 +194,19 @@ export default function Navbar() {
         </div>
       </header>
 
-      {/* Bottom tab bar (mobile only) */}
+      {/* Bottom tab bar (mobile only). Fixed position + backdrop-blur is a
+          known combination for mobile Safari/Chrome to visibly desync from
+          the viewport mid-scroll (the bar appears to lag or jump) -- forcing
+          this onto its own GPU compositing layer up front, rather than
+          promoting/demoting it dynamically as the page scrolls, is the
+          standard fix. Also animates opacity only (no y-transform) on mount,
+          so there's never a competing transform to reconcile with the
+          static one below. */}
       <motion.nav
-        initial={{ y: 20, opacity: 0 }}
-        animate={{ y: 0, opacity: 1 }}
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
         transition={{ duration: 0.3 }}
-        className="fixed inset-x-0 bottom-0 z-40 flex border-t border-hairline bg-base-950/90 pb-[env(safe-area-inset-bottom)] backdrop-blur-md md:hidden"
+        className="fixed inset-x-0 bottom-0 z-40 flex transform-gpu border-t border-hairline bg-base-950/90 pb-[env(safe-area-inset-bottom)] backdrop-blur-md will-change-transform md:hidden"
       >
         {NAV_ITEMS.map(({ to, label, Icon }) => (
           <NavLink

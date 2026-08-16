@@ -131,8 +131,17 @@ export default function EpisodeRow({
                 </button>
                 {/* Fast path above always stamps "now" -- this is the second
                     option for logging an episode watched on some other day,
-                    without slowing down the common one-tap case. */}
-                {!watched && <DateMarkControl label="Watched in the past" onConfirm={onMarkWatchedWithDate} />}
+                    without slowing down the common one-tap case. Always
+                    rendered (just hidden once watched, via `invisible` not
+                    conditional rendering) so this row's layout height never
+                    changes on toggle -- unmounting it here used to shrink the
+                    card by a whole line the instant you marked an episode
+                    watched, visibly resizing/jumping every card below it. */}
+                <DateMarkControl
+                  label="Watched in the past"
+                  onConfirm={onMarkWatchedWithDate}
+                  className={watched ? 'invisible' : ''}
+                />
               </>
             )}
           </div>
