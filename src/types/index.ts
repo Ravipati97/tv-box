@@ -197,6 +197,18 @@ export interface ShowStarted {
   started_at: string
 }
 
+/** A "hide this from Now Watching" marker -- doesn't touch show_started or
+ * episode_watched, just suppresses the show from Home until the user
+ * resumes it (see undismissShow in lib/showDismissed.ts). No denormalized
+ * show name/poster since nothing renders this row directly -- it's only
+ * ever used as a lookup set. */
+export interface ShowWatchingDismissed {
+  id: string
+  user_id: string
+  show_id: number
+  dismissed_at: string
+}
+
 /** One "I rewatched this" log entry -- independent of EpisodeWatched (which
  * only tracks first-time progress toward "finished"). Append-only: logging
  * a rewatch never edits or replaces an earlier one. */

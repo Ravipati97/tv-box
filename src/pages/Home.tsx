@@ -5,6 +5,7 @@ import { useAuth } from '../contexts/AuthContext'
 import { fetchRecentShowRatings, fetchRecentShowRatingsAllUsers } from '../lib/showRatings'
 import { fetchRecentWatched, fetchRecentWatchedAllUsers } from '../lib/watched'
 import { fetchStartedForUser } from '../lib/showStarted'
+import { dismissShow, fetchDismissedForUser, undismissShow } from '../lib/showDismissed'
 import { summarizeShowActivity, nowWatching, watchHistory, buildGroupActivity } from '../lib/showActivity'
 import type { GroupActivityEvent } from '../lib/showActivity'
 import { computeSeasonProgress, fetchNextEpisode, fetchSeasonBreakdowns } from '../lib/seasonProgress'
@@ -16,8 +17,10 @@ import HistorySection from '../components/HistorySection'
 import ActivityRow from '../components/ActivityRow'
 import SeasonProgressBar from '../components/SeasonProgressBar'
 import StreamingBadge from '../components/StreamingBadge'
+import Toast from '../components/Toast'
+import { useToast } from '../hooks/useToast'
 import { ShowGridSkeleton } from '../components/Skeletons'
-import type { EpisodeWatched, ShowRating, ShowStarted } from '../types'
+import type { EpisodeWatched, ShowRating, ShowStarted, ShowWatchingDismissed } from '../types'
 
 function greeting(): string {
   const hour = new Date().getHours()
@@ -32,8 +35,10 @@ export default function Home() {
   const [ratings, setRatings] = useState<ShowRating[]>([])
   const [watched, setWatched] = useState<EpisodeWatched[]>([])
   const [started, setStarted] = useState<ShowStarted[]>([])
+  const [dismissed, setDismissed] = useState<ShowWatchingDismissed[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const { toast, showUndo, showError, dismiss } = useToast()
 
   const [groupActivity, setGroupActivity] = useState<GroupActivityEvent[]>([])
   const [loadingGroup, setLoadingGroup] = useState(true)
@@ -43,12 +48,18 @@ export default function Home() {
     let cancelled = false
     setLoading(true)
     setError(null)
-    Promise.all([fetchRecentShowRatings(user.id, 2000), fetchRecentWatched(user.id, 2000), fetchStartedForUser(user.id)])
-      .then(([ratingRows, watchedRows, startedRows]) => {
+    Promise.all([
+      fetchRecentShowRatings(user.id, 2000),
+      fetchRecentWatched(user.id, 2000),
+      fetchStartedForUser(user.id),
+      fetchDismissedForUser(user.id),
+    ])
+      .then(([ratingRows, watchedRows, startedRows, dismissedRows]) => {
         if (!cancelled) {
           setRatings(ratingRows)
           setWatched(watchedRows)
           setStarted(startedRows)
+          setDismissed(dismissedRows)
         }
       })
       .catch((err) => {
@@ -81,12 +92,44 @@ export default function Home() {
   }, [])
 
   const activity = useMemo(
-    () => summarizeShowActivity(ratings, watched, started),
-    [ratings, watched, started],
+    () => summarizeShowActivity(ratings, watched, started, dismissed),
+    [ratings, watched, started, dismissed],
   )
   const watching = useMemo(() => nowWatching(activity), [activity])
   const history = useMemo(() => watchHistory(activity), [activity])
   const recentGroupActivity = groupActivity.slice(0, 5)
+
+  /** "Remove from Now Watching" -- hides the card without touching real
+   * watch history (episode_watched/show_started rows are untouched, see
+   * lib/showDismissed.ts). Optimistic + Undo, same pattern as every other
+   * remove action in the app -- the dismissed row also self-clears if the
+   * show is ever resumed from its detail page. */
+  async function handleRemoveFromWatching(showId: number) {
+    if (!user) return
+    const previous = dismissed
+    const optimisticRow: ShowWatchingDismissed = {
+      id: `optimistic-${showId}`,
+      user_id: user.id,
+      show_id: showId,
+      dismissed_at: new Date().toISOString(),
+    }
+    setDismissed((prev) => [...prev, optimisticRow])
+    try {
+      await dismissShow(user.id, showId)
+    } catch {
+      setDismissed(previous)
+      showError('Failed to remove from Now Watching. Try again.')
+      return
+    }
+    showUndo('Removed from Now Watching', async () => {
+      try {
+        await undismissShow(user.id, showId)
+        setDismissed((prev) => prev.filter((d) => d.show_id !== showId))
+      } catch {
+        showError('Failed to undo. Try removing it again.')
+      }
+    })
+  }
 
   // Per-season watched counts for everything in progress -- lets the card
   // below say "Season 4 · 2/10" instead of a flat, hard-to-parse "10/44".
@@ -207,8 +250,9 @@ export default function Home() {
                 initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.3, delay: Math.min(i, 12) * 0.02 }}
+                className="group relative"
               >
-                <Link to={`/show/${s.showId}`} className="group block">
+                <Link to={`/show/${s.showId}`} className="block">
                   <div className="relative aspect-[2/3] overflow-hidden rounded-2xl bg-base-800 ring-1 ring-hairline transition-all duration-300 group-hover:-translate-y-0.5 group-hover:shadow-[0_12px_32px_-8px_rgba(139,92,246,0.35)]">
                     {s.showPosterPath ? (
                       <img
@@ -250,6 +294,14 @@ export default function Home() {
                     />
                   </div>
                 </Link>
+                <button
+                  type="button"
+                  onClick={() => handleRemoveFromWatching(s.showId)}
+                  className="absolute right-1.5 top-1.5 flex h-6 w-6 items-center justify-center rounded-full bg-black/60 text-xs text-white opacity-0 backdrop-blur-sm transition-opacity duration-200 group-hover:opacity-100"
+                  aria-label={`Remove ${s.showName} from Now Watching`}
+                >
+                  ×
+                </button>
               </motion.div>
             )
           })}
@@ -292,6 +344,8 @@ export default function Home() {
           )}
         </div>
       )}
+
+      {toast && <Toast message={toast.message} tone={toast.tone} action={toast.action} onDismiss={dismiss} />}
     </div>
   )
 }

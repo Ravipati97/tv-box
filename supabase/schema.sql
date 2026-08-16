@@ -436,6 +436,45 @@ create policy "Anyone can delete started shows"
   on public.show_started for delete
   using (true);
 
+-- Explicit "hide this from Now Watching" marker -- lets someone clear a show
+-- off the Home page without touching anything real (episode_watched rows,
+-- ratings, and show_started all stay exactly as they were). Deliberately not
+-- a delete of show_started/episode_watched: those are watch history and
+-- progress, this is just "don't show this on Home right now". The app
+-- clears this automatically the next time an episode is marked watched or
+-- "Start watching" is tapped again for the show (see ShowDetail.tsx), so
+-- picking a dismissed show back up naturally un-hides it -- this is meant as
+-- "get this off my list for now", not a permanent block.
+create table if not exists public.show_watching_dismissed (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references public.users(id) on delete cascade,
+
+  show_id integer not null,
+
+  dismissed_at timestamptz not null default now(),
+
+  unique (user_id, show_id)
+);
+
+create index if not exists show_watching_dismissed_user_id_idx on public.show_watching_dismissed (user_id);
+
+alter table public.show_watching_dismissed enable row level security;
+
+drop policy if exists "Anyone can read dismissed now-watching" on public.show_watching_dismissed;
+create policy "Anyone can read dismissed now-watching"
+  on public.show_watching_dismissed for select
+  using (true);
+
+drop policy if exists "Anyone can insert dismissed now-watching" on public.show_watching_dismissed;
+create policy "Anyone can insert dismissed now-watching"
+  on public.show_watching_dismissed for insert
+  with check (true);
+
+drop policy if exists "Anyone can delete dismissed now-watching" on public.show_watching_dismissed;
+create policy "Anyone can delete dismissed now-watching"
+  on public.show_watching_dismissed for delete
+  using (true);
+
 create table if not exists public.show_list_items (
   id uuid primary key default gen_random_uuid(),
   list_id uuid not null references public.show_lists(id) on delete cascade,

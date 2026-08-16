@@ -6,6 +6,7 @@ import type {
   ShowRatingWithUser,
   ShowRewatch,
   ShowStarted,
+  ShowWatchingDismissed,
 } from '../types'
 
 /** Per-show rollup combining a rating (if any) with watch progress (if any). */
@@ -29,16 +30,22 @@ export interface ShowActivity {
    * of whether any episode has actually been marked watched yet. */
   started: boolean
   startedAt: string | null
+  /** True if explicitly removed from Now Watching (show_watching_dismissed).
+   * Doesn't affect watchedCount/finished/etc -- purely a Home display
+   * suppression, see nowWatching() below. */
+  dismissed: boolean
 }
 
-/** Merges show_ratings + episode_watched (+ optional show_started) rows for
- * one user into one summary per show. `started` defaults to empty since only
- * Home's Now Watching view needs it -- other callers (Recap, ProfileActivity)
- * don't render a 0/x state and can skip fetching it. */
+/** Merges show_ratings + episode_watched (+ optional show_started,
+ * show_watching_dismissed) rows for one user into one summary per show.
+ * `started`/`dismissed` default to empty since only Home's Now Watching view
+ * needs them -- other callers (Recap, ProfileActivity) don't render a 0/x
+ * state or a remove button and can skip fetching either. */
 export function summarizeShowActivity(
   ratings: ShowRating[],
   watched: EpisodeWatched[],
   started: ShowStarted[] = [],
+  dismissed: ShowWatchingDismissed[] = [],
 ): ShowActivity[] {
   const map = new Map<number, ShowActivity>()
 
@@ -60,6 +67,7 @@ export function summarizeShowActivity(
         finishedAtUnknown: false,
         started: false,
         startedAt: null,
+        dismissed: false,
       }
       map.set(showId, entry)
     }
@@ -109,14 +117,23 @@ export function summarizeShowActivity(
     entry.finishedAtUnknown = entry.finished ? entry.lastWatchedAtUnknown : false
   }
 
+  // Dismissed rows only ever target a show that's already in the map (you
+  // can only dismiss something currently showing in Now Watching) -- a
+  // missing entry means the underlying rating/watched/started rows were
+  // removed some other way, in which case there's nothing left to suppress.
+  for (const d of dismissed) {
+    const entry = map.get(d.show_id)
+    if (entry) entry.dismissed = true
+  }
+
   return Array.from(map.values())
 }
 
 /** In-progress shows -- watched something, or explicitly started (0/x),
- * not finished -- most recently watched (or started) first. */
+ * not finished, not dismissed -- most recently watched (or started) first. */
 export function nowWatching(summaries: ShowActivity[]): ShowActivity[] {
   return summaries
-    .filter((s) => (s.watchedCount > 0 || s.started) && !s.finished)
+    .filter((s) => (s.watchedCount > 0 || s.started) && !s.finished && !s.dismissed)
     .sort((a, b) => (b.lastWatchedAt ?? b.startedAt ?? '').localeCompare(a.lastWatchedAt ?? a.startedAt ?? ''))
 }
 

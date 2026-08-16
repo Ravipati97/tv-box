@@ -40,6 +40,7 @@ import { clearStreamingOverride, fetchStreamingOverride, setStreamingOverride } 
 import { invalidatePlatformCache, pickBestFreeProvider } from '../lib/streamingProvider'
 import { addToWatchlist, fetchWatchlistItem, removeFromWatchlist } from '../lib/watchlist'
 import { fetchStartedItem, startShow } from '../lib/showStarted'
+import { undismissShow } from '../lib/showDismissed'
 import { deleteRewatch, fetchRewatchesForShow, logRewatch, restoreRewatch } from '../lib/rewatches'
 import { fetchListMembershipForShow } from '../lib/lists'
 import { computeSeasonProgress } from '../lib/seasonProgress'
@@ -271,6 +272,21 @@ export default function ShowDetail() {
     [seasonRatingsForActive, user],
   )
 
+  /** Best-effort "un-hide from Now Watching" -- fired after any action that
+   * means the person is actively picking this show back up (marking an
+   * episode watched, or tapping "Start watching" again). Doesn't need to
+   * check whether the show was actually dismissed first: deleting a
+   * show_watching_dismissed row that doesn't exist is already a no-op, and
+   * this is a nice-to-have side effect, not something worth a loading state
+   * or an error toast if it fails -- worst case the show just stays hidden
+   * on Home until removed and re-added another way. */
+  function clearDismissed() {
+    if (!user || !show) return
+    undismissShow(user.id, show.id).catch(() => {
+      // Best-effort, see comment above -- fail silently.
+    })
+  }
+
   async function handleToggleWatched(episodeNumber: number, episodeName: string, runtimeMinutes: number | null) {
     if (!user || !show || activeSeason === null) return
     const key = watchedKey(activeSeason, episodeNumber)
@@ -327,6 +343,7 @@ export default function ShowDetail() {
         runtimeMinutes,
       })
       setWatched((prev) => ({ ...prev, [key]: saved }))
+      clearDismissed()
     } catch {
       setWatched((prev) => {
         const next = { ...prev }
@@ -389,6 +406,7 @@ export default function ShowDetail() {
         for (const row of saved) next[watchedKey(row.season_number, row.episode_number)] = row
         return next
       })
+      clearDismissed()
       showUndo(
         previousRows.length > 0
           ? `Marked ${saved.length} episodes watched (${previousRows.length} overwritten)`
@@ -468,6 +486,7 @@ export default function ShowDetail() {
         showTotalEpisodes: show.number_of_episodes,
       })
       setStarted(row)
+      clearDismissed()
     } catch {
       showError('Failed to start watching. Try again.')
     } finally {
@@ -496,7 +515,10 @@ export default function ShowDetail() {
         watchedAt: input.watchedAt,
         watchedAtUnknown: input.unknownDate,
       })
-      if (saved[0]) setWatched((prev) => ({ ...prev, [key]: saved[0] }))
+      if (saved[0]) {
+        setWatched((prev) => ({ ...prev, [key]: saved[0] }))
+        clearDismissed()
+      }
     } catch {
       showError('Failed to mark this episode watched. Try again.')
     }
@@ -532,6 +554,7 @@ export default function ShowDetail() {
         for (const row of saved) next[watchedKey(row.season_number, row.episode_number)] = row
         return next
       })
+      clearDismissed()
       showUndo(
         previousRows.length > 0
           ? `Marked ${saved.length} episodes watched (${previousRows.length} overwritten)`
