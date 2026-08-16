@@ -184,6 +184,19 @@ export interface WatchlistItem {
   added_at: string
 }
 
+/** An explicit "I'm starting this" declaration -- covers the 0/x gap in Now
+ * Watching before any episode has actually been marked watched. Independent
+ * of EpisodeWatched; see show_started in supabase/schema.sql. */
+export interface ShowStarted {
+  id: string
+  user_id: string
+  show_id: number
+  show_name: string
+  show_poster_path: string | null
+  show_total_episodes: number | null
+  started_at: string
+}
+
 /** One "I rewatched this" log entry -- independent of EpisodeWatched (which
  * only tracks first-time progress toward "finished"). Append-only: logging
  * a rewatch never edits or replaces an earlier one. */

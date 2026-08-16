@@ -4,6 +4,7 @@ import { motion } from 'framer-motion'
 import { useAuth } from '../contexts/AuthContext'
 import { fetchRecentShowRatings, fetchRecentShowRatingsAllUsers } from '../lib/showRatings'
 import { fetchRecentWatched, fetchRecentWatchedAllUsers } from '../lib/watched'
+import { fetchStartedForUser } from '../lib/showStarted'
 import { summarizeShowActivity, nowWatching, watchHistory, buildGroupActivity } from '../lib/showActivity'
 import type { GroupActivityEvent } from '../lib/showActivity'
 import { computeSeasonProgress, fetchNextEpisode, fetchSeasonBreakdowns } from '../lib/seasonProgress'
@@ -15,7 +16,7 @@ import HistorySection from '../components/HistorySection'
 import ActivityRow from '../components/ActivityRow'
 import SeasonProgressBar from '../components/SeasonProgressBar'
 import StreamingBadge from '../components/StreamingBadge'
-import type { EpisodeWatched, ShowRating } from '../types'
+import type { EpisodeWatched, ShowRating, ShowStarted } from '../types'
 
 function greeting(): string {
   const hour = new Date().getHours()
@@ -29,6 +30,7 @@ export default function Home() {
   const { user } = useAuth()
   const [ratings, setRatings] = useState<ShowRating[]>([])
   const [watched, setWatched] = useState<EpisodeWatched[]>([])
+  const [started, setStarted] = useState<ShowStarted[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
@@ -40,11 +42,12 @@ export default function Home() {
     let cancelled = false
     setLoading(true)
     setError(null)
-    Promise.all([fetchRecentShowRatings(user.id, 2000), fetchRecentWatched(user.id, 2000)])
-      .then(([ratingRows, watchedRows]) => {
+    Promise.all([fetchRecentShowRatings(user.id, 2000), fetchRecentWatched(user.id, 2000), fetchStartedForUser(user.id)])
+      .then(([ratingRows, watchedRows, startedRows]) => {
         if (!cancelled) {
           setRatings(ratingRows)
           setWatched(watchedRows)
+          setStarted(startedRows)
         }
       })
       .catch((err) => {
@@ -76,7 +79,10 @@ export default function Home() {
     }
   }, [])
 
-  const activity = useMemo(() => summarizeShowActivity(ratings, watched), [ratings, watched])
+  const activity = useMemo(
+    () => summarizeShowActivity(ratings, watched, started),
+    [ratings, watched, started],
+  )
   const watching = useMemo(() => nowWatching(activity), [activity])
   const history = useMemo(() => watchHistory(activity), [activity])
   const recentGroupActivity = groupActivity.slice(0, 5)

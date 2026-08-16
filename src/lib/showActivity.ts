@@ -1,4 +1,4 @@
-import type { EpisodeWatched, EpisodeWatchedWithUser, ShowRating, ShowRatingWithUser } from '../types'
+import type { EpisodeWatched, EpisodeWatchedWithUser, ShowRating, ShowRatingWithUser, ShowStarted } from '../types'
 
 /** Per-show rollup combining a rating (if any) with watch progress (if any). */
 export interface ShowActivity {
@@ -17,12 +17,20 @@ export interface ShowActivity {
   /** Same as lastWatchedAt when finished, for clarity at call sites. */
   finishedAt: string | null
   finishedAtUnknown: boolean
+  /** True if explicitly declared "Start watching" (show_started), independent
+   * of whether any episode has actually been marked watched yet. */
+  started: boolean
+  startedAt: string | null
 }
 
-/** Merges show_ratings + episode_watched rows (for one user) into one summary per show. */
+/** Merges show_ratings + episode_watched (+ optional show_started) rows for
+ * one user into one summary per show. `started` defaults to empty since only
+ * Home's Now Watching view needs it -- other callers (Recap, ProfileActivity)
+ * don't render a 0/x state and can skip fetching it. */
 export function summarizeShowActivity(
   ratings: ShowRating[],
   watched: EpisodeWatched[],
+  started: ShowStarted[] = [],
 ): ShowActivity[] {
   const map = new Map<number, ShowActivity>()
 
@@ -42,6 +50,8 @@ export function summarizeShowActivity(
         finished: false,
         finishedAt: null,
         finishedAtUnknown: false,
+        started: false,
+        startedAt: null,
       }
       map.set(showId, entry)
     }
@@ -52,6 +62,15 @@ export function summarizeShowActivity(
     const entry = entryFor(r.show_id, r.show_name, r.show_poster_path)
     entry.rating = r.rating
     entry.ratedAt = r.rated_at
+  }
+
+  for (const s of started) {
+    const entry = entryFor(s.show_id, s.show_name, s.show_poster_path)
+    entry.started = true
+    entry.startedAt = s.started_at
+    // Fallback only -- if this show also has real episode_watched rows, the
+    // loop below overwrites this with a more current snapshot.
+    entry.totalEpisodes = s.show_total_episodes
   }
 
   const watchedByShow = new Map<number, EpisodeWatched[]>()
@@ -85,20 +104,23 @@ export function summarizeShowActivity(
   return Array.from(map.values())
 }
 
-/** In-progress shows (watched something, not finished), most recently watched first. */
+/** In-progress shows -- watched something, or explicitly started (0/x),
+ * not finished -- most recently watched (or started) first. */
 export function nowWatching(summaries: ShowActivity[]): ShowActivity[] {
   return summaries
-    .filter((s) => s.watchedCount > 0 && !s.finished)
-    .sort((a, b) => (b.lastWatchedAt ?? '').localeCompare(a.lastWatchedAt ?? ''))
+    .filter((s) => (s.watchedCount > 0 || s.started) && !s.finished)
+    .sort((a, b) => (b.lastWatchedAt ?? b.startedAt ?? '').localeCompare(a.lastWatchedAt ?? a.startedAt ?? ''))
 }
 
 /**
  * "Done with it" shows: finished (100% watched), or rated without ever
  * tracking episodes. Excludes shows still in progress -- those live in
- * nowWatching() until they're finished.
+ * nowWatching() until they're finished. A show that's been explicitly
+ * started stays in nowWatching() even if it's also rated with 0 episodes
+ * watched, rather than showing up in both places.
  */
 export function watchHistory(summaries: ShowActivity[]): ShowActivity[] {
-  return summaries.filter((s) => s.finished || (s.rating !== null && s.watchedCount === 0))
+  return summaries.filter((s) => s.finished || (s.rating !== null && s.watchedCount === 0 && !s.started))
 }
 
 // 'platform' isn't a plain array sort (it's a grouping -- see HistorySection),

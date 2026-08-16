@@ -395,6 +395,47 @@ create policy "Anyone can delete lists"
   on public.show_lists for delete
   using (true);
 
+-- Explicit "in progress" marker for a show you've declared you're starting
+-- but haven't logged any episodes for yet. Now Watching used to be purely
+-- derived from episode_watched (no status field to keep in sync), so "Start
+-- watching" faked it by marking episode 1 watched -- which polluted real
+-- watch history with an episode you hadn't actually seen. This table exists
+-- only to cover that 0/x gap: once episode_watched has real rows for the
+-- show, those drive watchedCount/progress as normal, and this row just sits
+-- alongside them harmlessly (see summarizeShowActivity in showActivity.ts).
+create table if not exists public.show_started (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references public.users(id) on delete cascade,
+
+  show_id integer not null,
+  show_name text not null,
+  show_poster_path text,
+  show_total_episodes integer,
+
+  started_at timestamptz not null default now(),
+
+  unique (user_id, show_id)
+);
+
+create index if not exists show_started_user_id_idx on public.show_started (user_id);
+
+alter table public.show_started enable row level security;
+
+drop policy if exists "Anyone can read started shows" on public.show_started;
+create policy "Anyone can read started shows"
+  on public.show_started for select
+  using (true);
+
+drop policy if exists "Anyone can insert started shows" on public.show_started;
+create policy "Anyone can insert started shows"
+  on public.show_started for insert
+  with check (true);
+
+drop policy if exists "Anyone can delete started shows" on public.show_started;
+create policy "Anyone can delete started shows"
+  on public.show_started for delete
+  using (true);
+
 create table if not exists public.show_list_items (
   id uuid primary key default gen_random_uuid(),
   list_id uuid not null references public.show_lists(id) on delete cascade,

@@ -37,6 +37,7 @@ import {
 import { clearStreamingOverride, fetchStreamingOverride, setStreamingOverride } from '../lib/streamingOverrides'
 import { invalidatePlatformCache, pickBestFreeProvider } from '../lib/streamingProvider'
 import { addToWatchlist, fetchWatchlistItem, removeFromWatchlist } from '../lib/watchlist'
+import { fetchStartedItem, startShow } from '../lib/showStarted'
 import { deleteRewatch, fetchRewatchesForShow, logRewatch } from '../lib/rewatches'
 import { fetchListMembershipForShow } from '../lib/lists'
 import { computeSeasonProgress } from '../lib/seasonProgress'
@@ -48,6 +49,7 @@ import type {
   SeasonRatingWithUser,
   ShowRatingWithUser,
   ShowRewatch,
+  ShowStarted,
   StreamingOverride,
   TmdbProviderListItem,
   TmdbSeasonDetail,
@@ -87,6 +89,7 @@ export default function ShowDetail() {
   const [override, setOverride] = useState<StreamingOverride | null>(null)
   const [pickerOpen, setPickerOpen] = useState(false)
   const [startingWatch, setStartingWatch] = useState(false)
+  const [started, setStarted] = useState<ShowStarted | null>(null)
   const [bulkUndo, setBulkUndo] = useState<BulkMarkUndo | null>(null)
   const [watchlistItem, setWatchlistItem] = useState<WatchlistItem | null>(null)
   const [savingWatchlist, setSavingWatchlist] = useState(false)
@@ -104,16 +107,25 @@ export default function ShowDetail() {
 
     async function load() {
       try {
-        const [showData, watchedMap, ratings, seasonRatingRows, watchlistRow, rewatchRows, listMembershipSet] =
-          await Promise.all([
-            getShowDetail(showId),
-            user ? fetchWatchedForShow(user.id, showId) : Promise.resolve({} as WatchedMap),
-            fetchAllShowRatings(showId),
-            fetchAllSeasonRatingsForShow(showId),
-            user ? fetchWatchlistItem(user.id, showId) : Promise.resolve(null),
-            user ? fetchRewatchesForShow(user.id, showId) : Promise.resolve([]),
-            user ? fetchListMembershipForShow(user.id, showId) : Promise.resolve(new Set<string>()),
-          ])
+        const [
+          showData,
+          watchedMap,
+          ratings,
+          seasonRatingRows,
+          watchlistRow,
+          rewatchRows,
+          listMembershipSet,
+          startedRow,
+        ] = await Promise.all([
+          getShowDetail(showId),
+          user ? fetchWatchedForShow(user.id, showId) : Promise.resolve({} as WatchedMap),
+          fetchAllShowRatings(showId),
+          fetchAllSeasonRatingsForShow(showId),
+          user ? fetchWatchlistItem(user.id, showId) : Promise.resolve(null),
+          user ? fetchRewatchesForShow(user.id, showId) : Promise.resolve([]),
+          user ? fetchListMembershipForShow(user.id, showId) : Promise.resolve(new Set<string>()),
+          user ? fetchStartedItem(user.id, showId) : Promise.resolve(null),
+        ])
         if (cancelled) return
         setShow(showData)
         setWatched(watchedMap)
@@ -122,6 +134,7 @@ export default function ShowDetail() {
         setWatchlistItem(watchlistRow)
         setRewatches(rewatchRows)
         setListMembership(listMembershipSet)
+        setStarted(startedRow)
         // Default to whichever season you're actually on -- the first one
         // that isn't fully watched yet (same "current season" logic Home's
         // Now Watching card already uses), not always Season 1. Falls back
@@ -393,52 +406,28 @@ export default function ShowDetail() {
     })
   }
 
-  /** "Start watching" -- the manual add-to-Now-Watching entry point. Rather
-   * than a separate status field to keep in sync with the real watch data,
-   * this just marks the first episode watched: Now Watching is (and stays)
-   * a pure derivation of episode_watched, so there's only ever one source
-   * of truth for what's in progress. One tap, stamped "now" -- this is a
-   * declaration that you're starting today, not a past event to date, so
-   * unlike the other bulk actions it skips the date picker entirely. */
+  /** "Start watching" -- the manual add-to-Now-Watching entry point for a
+   * show you're about to start but haven't logged any episodes for yet.
+   * This used to fake progress by marking episode 1 watched (so Now
+   * Watching, a pure derivation of episode_watched, would pick the show up)
+   * -- but that meant an episode you hadn't actually seen showed up in real
+   * watch history. It now just records a standalone "started" declaration
+   * (show_started); Now Watching shows 0/x until an episode is genuinely
+   * marked watched. One tap, stamped "now" -- a declaration that you're
+   * starting today, not a past event to date, so unlike the other bulk
+   * actions it skips the date picker entirely. */
   async function handleStartWatching() {
     if (!user || !show) return
-    const firstSeason = show.seasons.find((s) => s.season_number > 0) ?? show.seasons[0]
-    if (!firstSeason) return
     setStartingWatch(true)
     try {
-      // Fetched directly rather than read from `season` state: that state
-      // might still be mid-load (or on a different season) at the moment
-      // this fires, and this is the only chance to capture episode 1's
-      // runtime for "hours watched" -- falling back to state here could
-      // silently record a null runtime purely from a loading-order race.
-      const firstEpisode =
-        season && season.season_number === firstSeason.season_number
-          ? (season.episodes.find((ep) => ep.episode_number === 1) ?? null)
-          : await getSeasonDetail(show.id, firstSeason.season_number)
-              .then((detail) => detail.episodes.find((ep) => ep.episode_number === 1) ?? null)
-              .catch(() => null)
-      const saved = await bulkMarkWatched({
+      const row = await startShow({
         userId: user.id,
         showId: show.id,
         showName: show.name,
         showPosterPath: show.poster_path,
         showTotalEpisodes: show.number_of_episodes,
-        episodes: [
-          {
-            seasonNumber: firstSeason.season_number,
-            episodeNumber: 1,
-            episodeName: firstEpisode?.name ?? null,
-            runtimeMinutes: firstEpisode?.runtime ?? null,
-          },
-        ],
-        watchedAt: new Date().toISOString(),
-        watchedAtUnknown: false,
       })
-      setWatched((prev) => {
-        const next = { ...prev }
-        for (const row of saved) next[watchedKey(row.season_number, row.episode_number)] = row
-        return next
-      })
+      setStarted(row)
     } finally {
       setStartingWatch(false)
     }
@@ -789,7 +778,7 @@ export default function ShowDetail() {
             </div>
             {watchedCount < totalEpisodes && (
               <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1.5">
-                {watchedCount === 0 && (
+                {watchedCount === 0 && !started && (
                   <button
                     type="button"
                     onClick={handleStartWatching}
