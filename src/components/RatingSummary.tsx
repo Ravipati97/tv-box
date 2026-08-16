@@ -48,6 +48,21 @@ export default function RatingSummary({
         {saving && (
           <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-base-600 border-t-accent-400" />
         )}
+        {myRating > 0 && (
+          // The star row itself supports clearing too (tap/click your
+          // current rating again), but that's a hidden gesture nobody would
+          // guess on their own -- this is the actual, visible way to undo a
+          // rating.
+          <button
+            type="button"
+            onClick={() => onChange(0)}
+            disabled={saving}
+            aria-label="Clear your rating"
+            className="text-xs text-base-500 underline decoration-dotted underline-offset-2 transition-colors duration-150 hover:text-base-300 disabled:opacity-50"
+          >
+            Clear
+          </button>
+        )}
         {ratings.length > 0 && (
           <button
             type="button"
