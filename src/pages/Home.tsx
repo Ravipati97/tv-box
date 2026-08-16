@@ -2,22 +2,21 @@ import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import { useAuth } from '../contexts/AuthContext'
-import { fetchRecentShowRatings, fetchRecentShowRatingsAllUsers } from '../lib/showRatings'
-import { fetchRecentSeasonRatingsAllUsers } from '../lib/seasonRatings'
-import { fetchRecentWatched, fetchRecentWatchedAllUsers } from '../lib/watched'
+import { fetchRecentShowRatings } from '../lib/showRatings'
+import { fetchRecentWatched } from '../lib/watched'
 import { fetchStartedForUser } from '../lib/showStarted'
 import { fetchDismissedForUser } from '../lib/showDismissed'
 import { fetchWatchlist } from '../lib/watchlist'
-import { summarizeShowActivity, nowWatching, buildGroupActivity } from '../lib/showActivity'
-import type { GroupActivityEvent } from '../lib/showActivity'
+import { summarizeShowActivity, nowWatching } from '../lib/showActivity'
 import { computeSeasonProgress, fetchNextEpisode, fetchSeasonBreakdowns } from '../lib/seasonProgress'
 import type { NextEpisode, SeasonProgress } from '../lib/seasonProgress'
 import { useStreamingPlatforms } from '../hooks/useStreamingPlatforms'
 import { posterUrl } from '../lib/tmdb'
 import { formatShortDate } from '../lib/date'
-import ActivityRow from '../components/ActivityRow'
 import SeasonProgressBar from '../components/SeasonProgressBar'
 import StreamingBadge from '../components/StreamingBadge'
+import UpcomingRow from '../components/UpcomingRow'
+import type { UpcomingItem } from '../components/UpcomingRow'
 import { ShowGridSkeleton } from '../components/Skeletons'
 import EmptyState from '../components/EmptyState'
 import type { EpisodeWatched, ShowRating, ShowStarted, ShowWatchingDismissed, WatchlistItem } from '../types'
@@ -39,9 +38,6 @@ export default function Home() {
   const [watchlist, setWatchlist] = useState<WatchlistItem[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-
-  const [groupActivity, setGroupActivity] = useState<GroupActivityEvent[]>([])
-  const [loadingGroup, setLoadingGroup] = useState(true)
 
   useEffect(() => {
     if (!user) return
@@ -75,34 +71,11 @@ export default function Home() {
     }
   }, [user])
 
-  useEffect(() => {
-    let cancelled = false
-    setLoadingGroup(true)
-    Promise.all([
-      fetchRecentShowRatingsAllUsers(150),
-      fetchRecentWatchedAllUsers(400),
-      fetchRecentSeasonRatingsAllUsers(150),
-    ])
-      .then(([ratingRows, watchedRows, seasonRatingRows]) => {
-        if (!cancelled) setGroupActivity(buildGroupActivity(ratingRows, watchedRows, seasonRatingRows))
-      })
-      .catch(() => {
-        // The teaser is a nice-to-have -- fail quietly, the full page will surface errors.
-      })
-      .finally(() => {
-        if (!cancelled) setLoadingGroup(false)
-      })
-    return () => {
-      cancelled = true
-    }
-  }, [])
-
   const activity = useMemo(
     () => summarizeShowActivity(ratings, watched, started, dismissed),
     [ratings, watched, started, dismissed],
   )
   const watching = useMemo(() => nowWatching(activity), [activity])
-  const recentGroupActivity = groupActivity.slice(0, 5)
 
   // Per-season watched counts for everything in progress -- lets the card
   // below say "Season 4 · 2/10" instead of a flat, hard-to-parse "10/44".
@@ -177,6 +150,27 @@ export default function Home() {
       cancelled = true
     }
   }, [seasonProgress])
+
+  // Aggregates the same per-show next-episode lookups above into one
+  // soonest-first list, instead of that info only surfacing as a small badge
+  // on whichever card happens to have it (easy to miss once Now Watching
+  // grows past a row or two).
+  const upcoming = useMemo<UpcomingItem[]>(() => {
+    const items: UpcomingItem[] = []
+    for (const s of watching) {
+      const next = nextEpisodes.get(s.showId)
+      if (!next) continue
+      items.push({
+        showId: s.showId,
+        showName: s.showName,
+        showPosterPath: s.showPosterPath,
+        seasonNumber: next.seasonNumber,
+        episodeNumber: next.episodeNumber,
+        airDate: next.airDate,
+      })
+    }
+    return items.sort((a, b) => a.airDate.localeCompare(b.airDate))
+  }, [watching, nextEpisodes])
 
   return (
     <div className="mx-auto max-w-5xl px-4 pb-24 pt-6 sm:px-6 md:pb-10">
@@ -271,6 +265,23 @@ export default function Home() {
         </div>
       )}
 
+      {/* Upcoming -- next air dates across everything in Now Watching, soonest
+          first. Friend activity used to have a teaser here too, but that's a
+          browse-when-curious feed (still lives in full on Activity); this is
+          time-sensitive, so it earns the homepage slot instead. */}
+      {upcoming.length > 0 && (
+        <div className="mt-12">
+          <div className="mb-4 flex items-center justify-between">
+            <h2 className="font-display text-lg font-semibold text-base-100">Upcoming</h2>
+          </div>
+          <div className="space-y-2">
+            {upcoming.map((item) => (
+              <UpcomingRow key={item.showId} item={item} />
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* Watchlist -- shows saved for later, right below what's in progress.
           History moved off Home entirely (still on Profile) -- removing a
           show from Now Watching is now handled from the show's own page
@@ -317,30 +328,6 @@ export default function Home() {
         </div>
       )}
 
-      {/* Recently in the group -- a taste of the full Activity feed, right on Home. */}
-      {(loadingGroup || recentGroupActivity.length > 0) && (
-        <div className="mt-12">
-          <div className="mb-4 flex items-center justify-between">
-            <h2 className="font-display text-lg font-semibold text-base-100">Recently in the group</h2>
-            <Link to="/activity" className="text-xs font-medium text-accent-400 hover:underline">
-              See all &rarr;
-            </Link>
-          </div>
-          {loadingGroup ? (
-            <div className="space-y-2">
-              {Array.from({ length: 3 }).map((_, i) => (
-                <div key={i} className="h-16 animate-pulse rounded-xl bg-base-850/70" />
-              ))}
-            </div>
-          ) : (
-            <div className="space-y-2">
-              {recentGroupActivity.map((event) => (
-                <ActivityRow key={event.key} event={event} />
-              ))}
-            </div>
-          )}
-        </div>
-      )}
     </div>
   )
 }
