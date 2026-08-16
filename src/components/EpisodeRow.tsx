@@ -56,7 +56,7 @@ export default function EpisodeRow({
         watched ? 'ring-1 ring-inset ring-accent-500/20' : ''
       } ${isUpcoming ? 'opacity-60' : ''}`}
     >
-      <div className="flex gap-3 sm:gap-4">
+      <div className="flex items-start gap-3 sm:gap-4">
         <button
           type="button"
           onClick={() => setExpanded((v) => !v)}
