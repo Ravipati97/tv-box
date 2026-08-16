@@ -1,3 +1,4 @@
+import { useEffect, useRef } from 'react'
 import { motion } from 'framer-motion'
 import type { TmdbSeasonSummary } from '../types'
 
@@ -9,6 +10,16 @@ interface SeasonTabsProps {
 
 export default function SeasonTabs({ seasons, active, onSelect }: SeasonTabsProps) {
   const real = seasons.filter((s) => s.season_number > 0 || seasons.length === 1)
+  const activeRef = useRef<HTMLButtonElement>(null)
+
+  // This row scrolls horizontally on narrow screens (4+ seasons rarely all
+  // fit), but nothing scrolled the selected tab into view -- landing
+  // straight on Season 4 of a show you're mid-watching left it clipped at
+  // the edge with no hint the row was even scrollable. block: 'nearest'
+  // keeps this from also trying to scroll the page vertically.
+  useEffect(() => {
+    activeRef.current?.scrollIntoView({ behavior: 'smooth', inline: 'nearest', block: 'nearest' })
+  }, [active])
 
   return (
     <div className="no-scrollbar -mx-4 flex gap-2 overflow-x-auto px-4 pb-1 sm:mx-0 sm:px-0">
@@ -17,6 +28,7 @@ export default function SeasonTabs({ seasons, active, onSelect }: SeasonTabsProp
         return (
           <button
             key={season.id}
+            ref={isActive ? activeRef : undefined}
             type="button"
             onClick={() => onSelect(season.season_number)}
             className="relative shrink-0 px-3.5 py-1.5 text-sm font-medium transition-colors duration-200"

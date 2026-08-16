@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { motion } from 'framer-motion'
 import { stillUrl } from '../lib/tmdb'
 import { formatShortDate, isFutureDate } from '../lib/date'
@@ -28,7 +28,22 @@ export default function EpisodeRow({
 }: EpisodeRowProps) {
   const [saving, setSaving] = useState(false)
   const [expanded, setExpanded] = useState(false)
+  // Whether the clamped overview actually overflows 2 lines -- measured
+  // once, while still collapsed, so "Show more" only appears when there's
+  // really more text to reveal (a short one-line overview shouldn't get a
+  // toggle that does nothing). Tapping the thumbnail or the title used to
+  // silently expand the description too, with no visual hint either was
+  // interactive -- an explicit "Show more" link is the standard, actually
+  // discoverable version of that same affordance.
+  const [isTruncated, setIsTruncated] = useState(false)
+  const overviewRef = useRef<HTMLParagraphElement>(null)
   const still = stillUrl(episode.still_path)
+
+  useEffect(() => {
+    const el = overviewRef.current
+    if (!el) return
+    setIsTruncated(el.scrollHeight > el.clientHeight + 1)
+  }, [episode.overview])
   // TMDB lists placeholder rows for episodes that haven't aired yet (no
   // synopsis, no image, generic "Episode N" title) for shows still airing --
   // marking one of these "watched" would be nonsensical, and doing it by
@@ -57,11 +72,7 @@ export default function EpisodeRow({
       } ${isUpcoming ? 'opacity-60' : ''}`}
     >
       <div className="flex items-start gap-3 sm:gap-4">
-        <button
-          type="button"
-          onClick={() => setExpanded((v) => !v)}
-          className="relative aspect-video w-28 shrink-0 overflow-hidden rounded-lg bg-base-800 sm:w-40"
-        >
+        <div className="relative aspect-video w-28 shrink-0 overflow-hidden rounded-lg bg-base-800 sm:w-40">
           {still ? (
             <img
               src={still}
@@ -82,7 +93,7 @@ export default function EpisodeRow({
               No image
             </div>
           )}
-        </button>
+        </div>
 
         <div className="min-w-0 flex-1">
           <div className="flex items-start justify-between gap-2">
@@ -90,13 +101,9 @@ export default function EpisodeRow({
               <p className="text-[11px] font-semibold uppercase tracking-wide text-accent-400">
                 Episode {episode.episode_number}
               </p>
-              <button
-                type="button"
-                onClick={() => setExpanded((v) => !v)}
-                className="text-left text-sm font-medium text-base-100 sm:text-base"
-              >
+              <p className="text-sm font-medium text-base-100 sm:text-base">
                 {episode.name || `Episode ${episode.episode_number}`}
-              </button>
+              </p>
             </div>
             {episode.runtime ? (
               <span className="shrink-0 text-xs text-base-500">{episode.runtime}m</span>
@@ -104,10 +111,20 @@ export default function EpisodeRow({
           </div>
 
           <p
+            ref={overviewRef}
             className={`mt-1 text-xs text-base-400 sm:text-sm ${expanded ? '' : 'line-clamp-2'}`}
           >
             {episode.overview || 'No synopsis available.'}
           </p>
+          {isTruncated && (
+            <button
+              type="button"
+              onClick={() => setExpanded((v) => !v)}
+              className="mt-0.5 text-xs font-medium text-accent-400 hover:underline"
+            >
+              {expanded ? 'Show less' : 'Show more'}
+            </button>
+          )}
 
           <div className="mt-2.5 flex flex-wrap items-center gap-x-3 gap-y-1.5 sm:mt-3">
             {isUpcoming ? (
