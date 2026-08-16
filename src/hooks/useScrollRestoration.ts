@@ -29,7 +29,12 @@ export function useScrollRestoration() {
 
   useEffect(() => {
     if (navType !== 'POP') {
-      window.scrollTo(0, 0)
+      // Smooth here -- this is the common "tapped a nav item" case, and
+      // should feel like an animated glide, not a jarring snap. The POP
+      // restore below stays instant on purpose: it calls scrollTo up to 60
+      // times while content is still loading in, and animating each of
+      // those would fight itself into a stutter instead of landing cleanly.
+      window.scrollTo({ top: 0, left: 0, behavior: 'smooth' })
       return
     }
     const raw = sessionStorage.getItem(STORAGE_PREFIX + location.key)
