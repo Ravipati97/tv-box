@@ -2,7 +2,7 @@
 
 Letterboxd, but for TV shows — search a show, rate it, and track what you've watched episode by episode.
 
-**Live at:** https://ravipati97.github.io/tv-box/
+**Live at:** https://thetvbox.github.io/
 
 ## Using it
 

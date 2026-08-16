@@ -3,10 +3,10 @@ import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
 
 // https://vite.dev/config/
-// base is set to the repo name so assets resolve correctly on GitHub Pages
-// (https://<username>.github.io/tv-box/). Change this if the repo is renamed.
+// Root-domain GitHub Pages deploy (thetvbox.github.io) -- base is '/' since
+// there's no repo-name subpath to account for.
 export default defineConfig({
-  base: '/tv-box/',
+  base: '/',
   plugins: [react(), tailwindcss()],
   build: {
     rollupOptions: {
