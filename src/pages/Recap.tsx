@@ -8,6 +8,7 @@ import { fetchRecentRewatches } from '../lib/rewatches'
 import { summarizeShowActivity } from '../lib/showActivity'
 import { availableRecapYears, buildYearRecap } from '../lib/recap'
 import { posterUrl } from '../lib/tmdb'
+import EmptyState from '../components/EmptyState'
 import type { EpisodeWatched, ShowRating, ShowRewatch } from '../types'
 
 export default function Recap() {
@@ -96,8 +97,7 @@ export default function Recap() {
           ))}
         </div>
       ) : error || !recap || years.length === 0 ? (
-        <div className="mt-10 flex flex-col items-center rounded-2xl border border-hairline bg-base-850/40 px-6 py-14 text-center">
-          <div className="mb-3 text-4xl">{error ? '⚠️' : '🎬'}</div>
+        <EmptyState icon={error ? '⚠️' : '🎬'}>
           <p className="max-w-xs text-sm text-base-500">
             {error ?? (
               <>
@@ -109,7 +109,7 @@ export default function Recap() {
               </>
             )}
           </p>
-        </div>
+        </EmptyState>
       ) : (
         <>
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">

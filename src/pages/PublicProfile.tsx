@@ -3,6 +3,7 @@ import { Link, useParams } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
 import { fetchUserByUsername } from '../lib/users'
 import ProfileActivity from '../components/ProfileActivity'
+import CenteredMessage from '../components/CenteredMessage'
 import type { AppUser } from '../types'
 
 export default function PublicProfile() {
@@ -31,16 +32,7 @@ export default function PublicProfile() {
   }, [username])
 
   if (error || profile === null) {
-    return (
-      <div className="mx-auto max-w-3xl px-4 pb-24 pt-16 text-center sm:px-6">
-        <p className="text-sm text-base-500">
-          {error ?? `No member found with username “${username}”.`}
-        </p>
-        <Link to="/members" className="mt-3 inline-block text-sm text-accent-400 hover:underline">
-          &larr; Back to members
-        </Link>
-      </div>
-    )
+    return <CenteredMessage message={error ?? `No member found with username “${username}”.`} />
   }
 
   const isMe = me?.username === username

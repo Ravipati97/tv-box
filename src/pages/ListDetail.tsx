@@ -6,6 +6,8 @@ import { fetchUserByUsername } from '../lib/users'
 import { addShowToList, deleteList, fetchList, fetchListItems, removeShowFromList } from '../lib/lists'
 import { posterUrl } from '../lib/tmdb'
 import Toast from '../components/Toast'
+import CenteredMessage from '../components/CenteredMessage'
+import EmptyState from '../components/EmptyState'
 import { useToast } from '../hooks/useToast'
 import { useEscapeAndFocusReturn } from '../hooks/useEscapeAndFocusReturn'
 import type { AppUser, ShowList, ShowListItem } from '../types'
@@ -107,14 +109,7 @@ export default function ListDetail() {
   }
 
   if (!loading && (loadError || profile === null || list === null)) {
-    return (
-      <div className="mx-auto max-w-3xl px-4 pb-24 pt-16 text-center sm:px-6">
-        <p className="text-sm text-base-500">{loadError ?? 'List not found.'}</p>
-        <Link to="/members" className="mt-3 inline-block text-sm text-accent-400 hover:underline">
-          &larr; Back to members
-        </Link>
-      </div>
-    )
+    return <CenteredMessage message={loadError ?? 'List not found.'} />
   }
 
   return (
@@ -178,12 +173,11 @@ export default function ListDetail() {
             </div>
 
             {items.length === 0 ? (
-              <div className="mt-10 flex flex-col items-center rounded-2xl border border-hairline bg-base-850/40 px-6 py-14 text-center">
-                <div className="mb-3 text-4xl">📋</div>
+              <EmptyState icon="📋">
                 <p className="max-w-xs text-sm text-base-500">
                   Nothing on this list yet. Add shows from any show&apos;s page.
                 </p>
-              </div>
+              </EmptyState>
             ) : (
               <div className="grid grid-cols-2 gap-x-4 gap-y-6 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
                 {items.map((item) => (

@@ -5,6 +5,7 @@ import { useAuth } from '../contexts/AuthContext'
 import { fetchRecentShowRatings } from '../lib/showRatings'
 import { fetchUserByUsername } from '../lib/users'
 import { posterUrl } from '../lib/tmdb'
+import CenteredMessage from '../components/CenteredMessage'
 import type { AppUser, ShowRating } from '../types'
 
 interface SharedShow {
@@ -87,25 +88,11 @@ export default function Compare() {
   }, [myRatings, theirRatings])
 
   if (them === null) {
-    return (
-      <div className="mx-auto max-w-3xl px-4 pb-24 pt-16 text-center sm:px-6">
-        <p className="text-sm text-base-500">No member found with username “{username}”.</p>
-        <Link to="/members" className="mt-3 inline-block text-sm text-accent-400 hover:underline">
-          &larr; Back to members
-        </Link>
-      </div>
-    )
+    return <CenteredMessage message={`No member found with username “${username}”.`} />
   }
 
   if (me && username === me.username) {
-    return (
-      <div className="mx-auto max-w-3xl px-4 pb-24 pt-16 text-center sm:px-6">
-        <p className="text-sm text-base-500">You can&apos;t compare with yourself.</p>
-        <Link to="/members" className="mt-3 inline-block text-sm text-accent-400 hover:underline">
-          &larr; Back to members
-        </Link>
-      </div>
-    )
+    return <CenteredMessage message="You can't compare with yourself." />
   }
 
   return (

@@ -8,6 +8,7 @@ import { fetchRewatchesForShow } from '../lib/rewatches'
 import { fetchUserByUsername } from '../lib/users'
 import { posterUrl } from '../lib/tmdb'
 import { formatShortDate } from '../lib/date'
+import CenteredMessage from '../components/CenteredMessage'
 import type { AppUser, EpisodeWatched, ShowRating, ShowRewatch } from '../types'
 
 export default function ShowDiary() {
@@ -58,14 +59,7 @@ export default function ShowDiary() {
   }, [username, showIdNum])
 
   if (profile === null) {
-    return (
-      <div className="mx-auto max-w-3xl px-4 pb-24 pt-16 text-center sm:px-6">
-        <p className="text-sm text-base-500">No member found with username “{username}”.</p>
-        <Link to="/members" className="mt-3 inline-block text-sm text-accent-400 hover:underline">
-          &larr; Back to members
-        </Link>
-      </div>
-    )
+    return <CenteredMessage message={`No member found with username “${username}”.`} />
   }
 
   const isMe = me?.username === username

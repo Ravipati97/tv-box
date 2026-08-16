@@ -7,6 +7,7 @@ import { posterUrl, providerLogoUrl } from '../lib/tmdb'
 import type { ResolvedProvider } from '../lib/streamingProvider'
 import { useStreamingPlatforms } from '../hooks/useStreamingPlatforms'
 import StreamingBadge from './StreamingBadge'
+import EmptyState from './EmptyState'
 import { formatShortDate } from '../lib/date'
 
 const SORT_LABELS: Record<HistorySort, string> = {
@@ -73,10 +74,9 @@ export default function HistorySection({
 
   if (activity.length === 0) {
     return (
-      <div className="mt-10 flex flex-col items-center rounded-2xl border border-hairline bg-base-850/40 px-6 py-14 text-center">
-        <div className="mb-3 text-4xl">{emptyIcon}</div>
+      <EmptyState icon={emptyIcon}>
         <p className="max-w-xs text-sm text-base-500">{emptyMessage}</p>
-      </div>
+      </EmptyState>
     )
   }
 

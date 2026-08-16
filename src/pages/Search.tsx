@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
 import ShowCard from '../components/ShowCard'
 import { ShowGridSkeleton } from '../components/Skeletons'
+import EmptyState from '../components/EmptyState'
 import { searchShows, isTmdbConfigured } from '../lib/tmdb'
 import { useStreamingPlatforms } from '../hooks/useStreamingPlatforms'
 import type { TmdbShowSummary } from '../types'
@@ -117,19 +118,17 @@ export default function Search() {
                 ))}
             </motion.div>
           ) : hasSearched && !error ? (
-            <div className="mt-14 flex flex-col items-center rounded-2xl border border-hairline bg-base-850/40 px-6 py-14 text-center">
-              <div className="mb-3 text-4xl">🔍</div>
+            <EmptyState icon="🔍" className="mt-14">
               <p className="text-sm text-base-500">
                 No shows found for &ldquo;{query}&rdquo;.
               </p>
-            </div>
+            </EmptyState>
           ) : !query.trim() ? (
-            <div className="mt-14 flex flex-col items-center rounded-2xl border border-hairline bg-base-850/40 px-6 py-14 text-center">
-              <div className="mb-3 text-4xl">📺</div>
+            <EmptyState icon="📺" className="mt-14">
               <p className="text-sm text-base-500">
                 Search for any TV show to start rating episodes.
               </p>
-            </div>
+            </EmptyState>
           ) : null}
         </AnimatePresence>
       )}

@@ -19,6 +19,7 @@ import ActivityRow from '../components/ActivityRow'
 import SeasonProgressBar from '../components/SeasonProgressBar'
 import StreamingBadge from '../components/StreamingBadge'
 import { ShowGridSkeleton } from '../components/Skeletons'
+import EmptyState from '../components/EmptyState'
 import type { EpisodeWatched, ShowRating, ShowStarted, ShowWatchingDismissed, WatchlistItem } from '../types'
 
 function greeting(): string {
@@ -197,8 +198,7 @@ export default function Home() {
       {loading ? (
         <ShowGridSkeleton count={5} progress />
       ) : watching.length === 0 ? (
-        <div className="mt-4 flex flex-col items-center rounded-2xl border border-hairline bg-base-850/40 px-6 py-14 text-center">
-          <div className="mb-3 text-4xl">📺</div>
+        <EmptyState icon="📺" className="mt-4">
           <p className="max-w-xs text-sm text-base-500">
             Nothing in progress. Mark an episode watched on any show and it&apos;ll show up here.
           </p>
@@ -208,7 +208,7 @@ export default function Home() {
           >
             Find a show
           </Link>
-        </div>
+        </EmptyState>
       ) : (
         <div className="grid grid-cols-2 gap-x-4 gap-y-6 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
           {watching.map((s, i) => {

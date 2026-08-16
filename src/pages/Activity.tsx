@@ -9,6 +9,7 @@ import type { GroupActivityEvent } from '../lib/showActivity'
 import { fetchAllUsers } from '../lib/users'
 import { dayKey, formatDiaryHeading } from '../lib/date'
 import ActivityRow from '../components/ActivityRow'
+import EmptyState from '../components/EmptyState'
 import { useAuth } from '../contexts/AuthContext'
 import type { AppUser } from '../types'
 
@@ -120,14 +121,13 @@ export default function Activity() {
           ))}
         </div>
       ) : dayGroups.length === 0 ? (
-        <div className="mt-10 flex flex-col items-center rounded-2xl border border-hairline bg-base-850/40 px-6 py-14 text-center">
-          <div className="mb-3 text-4xl">👋</div>
+        <EmptyState icon="👋">
           <p className="max-w-xs text-sm text-base-500">
             {filterUsername
               ? `@${filterUsername} hasn't rated or finished anything yet.`
               : "Nobody's rated or finished a show yet. Be the first."}
           </p>
-        </div>
+        </EmptyState>
       ) : (
         <div className="space-y-6">
           {dayGroups.map((group) => (
