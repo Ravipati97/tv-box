@@ -458,15 +458,10 @@ function DiaryRow({ entry, index }: { entry: DiaryEntry; index: number }) {
             )}
           </p>
         </div>
-        {entry.kind === 'rated' && entry.rating != null && (
+        {entry.rating != null && (
           <div className="flex shrink-0 items-center gap-1 text-sm font-semibold text-star">
             {entry.rating.toFixed(1)}
             <StarGlyph />
-          </div>
-        )}
-        {entry.kind === 'watched' && (entry.episodeCount ?? 0) > 1 && (
-          <div className="shrink-0 rounded-full bg-hover-strong px-2 py-0.5 text-[11px] font-medium text-base-400">
-            ×{entry.episodeCount}
           </div>
         )}
       </Link>

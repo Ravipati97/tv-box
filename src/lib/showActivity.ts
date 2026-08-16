@@ -197,12 +197,20 @@ export interface DiaryEntry {
    * (see buildUndatedDiaryEntries), which are never mixed into the sorted
    * list this drives. */
   at: string
+  /** Set for a standalone 'rated' entry, or merged onto a same-day
+   * 'watched'/'rewatched' entry for the same show -- logging and rating a
+   * show on the same day is one diary row, not two (matches how
+   * Letterboxd/Serializd treat a log + rating as a single entry). */
   rating?: number
   episodeCount?: number
-  /** Only set when episodeCount > 1 -- a single-episode entry shows
-   * episodeLabel (the specific episode) instead. */
+  /** Only set when episodeCount > 1 and episodeLabel isn't (i.e. the
+   * episodes span more than one season, so no single "S2E4-E6" range makes
+   * sense) -- a single-episode entry shows episodeLabel instead. */
   seasonLabel?: string
-  /** Only set when episodeCount === 1 -- e.g. "S2E4 · Man of the People". */
+  /** A specific episode or contiguous range within one season, e.g.
+   * "S2E4 · Man of the People" (single episode) or "S2E4-E6" (a same-day,
+   * same-season binge). Left unset for a scattered/cross-season group,
+   * which falls back to episodeCount + seasonLabel instead. */
   episodeLabel?: string
 }
 
@@ -213,12 +221,37 @@ function seasonLabelFor(seasonNumbers: number[]): string {
 }
 
 /**
+ * "S2E4-E6" for a same-day, same-season binge of more than one episode --
+ * more useful at a glance than a bare episode count, since it says exactly
+ * which episodes. Returns undefined (caller falls back to seasonLabelFor)
+ * when the episodes span more than one season, or are scattered enough
+ * (more than 4, non-contiguous) that a range/list would stop being readable.
+ */
+function episodeRangeLabel(rows: EpisodeWatched[]): string | undefined {
+  const seasons = new Set(rows.map((r) => r.season_number))
+  if (seasons.size > 1) return undefined
+  const season = rows[0].season_number
+  const nums = Array.from(new Set(rows.map((r) => r.episode_number))).sort((a, b) => a - b)
+  const isContiguous = nums[nums.length - 1] - nums[0] + 1 === nums.length
+  if (isContiguous) return `S${season}E${nums[0]}-E${nums[nums.length - 1]}`
+  if (nums.length <= 4) return `S${season}E${nums.join(', E')}`
+  return undefined
+}
+
+/**
  * Merges one user's ratings, watched episodes, and rewatches into a single
  * reverse-chronological diary -- the same idea as a film-tracking diary,
  * just at "episode(s) of a show, in one sitting" granularity for TV.
  * Excludes watched rows with no real date (watched_at_unknown) -- a diary
  * is fundamentally date-ordered, so those live in buildUndatedDiaryEntries
  * instead rather than being silently dropped.
+ *
+ * A rating logged the same day as watching (or rewatching) that same show
+ * merges onto that entry instead of getting its own row -- watching an
+ * episode and rating the show afterwards in the same sitting is one action
+ * from the diary's point of view, not two. Watched entries claim the merge
+ * slot for a (show, day) pair before rewatches do, since watched carries the
+ * more specific "what actually happened" detail.
  */
 export function buildDiaryEntries(
   ratings: ShowRating[],
@@ -226,29 +259,10 @@ export function buildDiaryEntries(
   rewatches: ShowRewatch[],
 ): DiaryEntry[] {
   const entries: DiaryEntry[] = []
-
-  for (const r of ratings) {
-    entries.push({
-      id: `rated-${r.id}`,
-      kind: 'rated',
-      showId: r.show_id,
-      showName: r.show_name,
-      showPosterPath: r.show_poster_path,
-      at: r.rated_at,
-      rating: r.rating,
-    })
-  }
-
-  for (const rw of rewatches) {
-    entries.push({
-      id: `rewatched-${rw.id}`,
-      kind: 'rewatched',
-      showId: rw.show_id,
-      showName: rw.show_name,
-      showPosterPath: rw.show_poster_path,
-      at: rw.rewatched_at,
-    })
-  }
+  // Tracks which entry (if any) a same-day rating for this show should
+  // merge onto -- populated by the watched/rewatched passes below, read by
+  // the ratings pass after.
+  const mergeTarget = new Map<string, DiaryEntry>()
 
   const watchedGroups = new Map<string, EpisodeWatched[]>()
   for (const w of watched) {
@@ -258,12 +272,13 @@ export function buildDiaryEntries(
     if (list) list.push(w)
     else watchedGroups.set(key, [w])
   }
-  for (const rows of watchedGroups.values()) {
+  for (const [key, rows] of watchedGroups) {
     // Latest episode in the group stands in for the whole entry's timestamp
     // and poster/name -- so a same-day binge still sorts correctly against
     // a rating or rewatch logged the same day.
     const latest = rows.reduce((a, b) => (b.watched_at > a.watched_at ? b : a))
-    entries.push({
+    const range = rows.length > 1 ? episodeRangeLabel(rows) : undefined
+    const entry: DiaryEntry = {
       id: `watched-${latest.show_id}-${dayKey(latest.watched_at)}`,
       kind: 'watched',
       showId: latest.show_id,
@@ -271,12 +286,49 @@ export function buildDiaryEntries(
       showPosterPath: latest.show_poster_path,
       at: latest.watched_at,
       episodeCount: rows.length,
-      seasonLabel: rows.length > 1 ? seasonLabelFor(rows.map((r) => r.season_number)) : undefined,
+      seasonLabel: rows.length > 1 && !range ? seasonLabelFor(rows.map((r) => r.season_number)) : undefined,
       episodeLabel:
         rows.length === 1
           ? `S${latest.season_number}E${latest.episode_number}${latest.episode_name ? ` · ${latest.episode_name}` : ''}`
-          : undefined,
-    })
+          : range,
+    }
+    entries.push(entry)
+    mergeTarget.set(key, entry)
+  }
+
+  for (const rw of rewatches) {
+    const entry: DiaryEntry = {
+      id: `rewatched-${rw.id}`,
+      kind: 'rewatched',
+      showId: rw.show_id,
+      showName: rw.show_name,
+      showPosterPath: rw.show_poster_path,
+      at: rw.rewatched_at,
+    }
+    entries.push(entry)
+    const key = `${rw.show_id}-${dayKey(rw.rewatched_at)}`
+    // Don't let a rewatch steal the merge slot from a watched entry that's
+    // already claimed it for this show/day -- still logged as its own row
+    // above, just not where a same-day rating would land.
+    if (!mergeTarget.has(key)) mergeTarget.set(key, entry)
+  }
+
+  for (const r of ratings) {
+    const key = `${r.show_id}-${dayKey(r.rated_at)}`
+    const target = mergeTarget.get(key)
+    if (target) {
+      target.rating = r.rating
+    } else {
+      entries.push({
+        id: `rated-${r.id}`,
+        kind: 'rated',
+        showId: r.show_id,
+        showName: r.show_name,
+        showPosterPath: r.show_poster_path,
+        at: r.rated_at,
+        rating: r.rating,
+      })
+    }
   }
 
   entries.sort((a, b) => b.at.localeCompare(a.at))
