@@ -1,0 +1,38 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1024" y2="1024" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#a78bfa"/>
+      <stop offset="0.45" stop-color="#8b5cf6"/>
+      <stop offset="1" stop-color="#6423c9"/>
+    </linearGradient>
+    <radialGradient id="sheen" cx="0.32" cy="0.22" r="0.75" gradientUnits="objectBoundingBox">
+      <stop offset="0" stop-color="#ffffff" stop-opacity="0.32"/>
+      <stop offset="0.5" stop-color="#ffffff" stop-opacity="0.06"/>
+      <stop offset="1" stop-color="#ffffff" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="screen" x1="174" y1="276" x2="850" y2="748" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#141420"/>
+      <stop offset="1" stop-color="#08080c"/>
+    </linearGradient>
+    <linearGradient id="screenTopHighlight" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#ffffff" stop-opacity="0.14"/>
+      <stop offset="1" stop-color="#ffffff" stop-opacity="0"/>
+    </linearGradient>
+    <linearGradient id="play" x1="419" y1="392" x2="629" y2="632" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#ffc84d"/>
+      <stop offset="1" stop-color="#ffb020"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Full-bleed background, no baked-in corner radius: iOS applies its own mask -->
+  <rect width="1024" height="1024" fill="url(#bg)"/>
+  <rect width="1024" height="1024" fill="url(#sheen)"/>
+
+  <!-- TV screen -->
+  <rect x="174" y="276" width="676" height="472" rx="72" fill="url(#screen)"/>
+  <rect x="174" y="276" width="676" height="236" rx="72" fill="url(#screenTopHighlight)"/>
+  <rect x="174.5" y="276.5" width="675" height="471" rx="71.5" fill="none" stroke="#ffffff" stroke-opacity="0.08" stroke-width="1.5"/>
+
+  <!-- Play glyph -->
+  <path d="M419 392 L629 512 L419 632 Z" fill="url(#play)"/>
+</svg>
