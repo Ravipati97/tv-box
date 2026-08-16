@@ -126,7 +126,7 @@ export default function Search() {
           ) : !query.trim() ? (
             <EmptyState icon="📺" className="mt-14">
               <p className="text-sm text-base-500">
-                Search for any TV show to start rating episodes.
+                Search for any TV show to mark as now watching, add to watchlist and rate per season.
               </p>
             </EmptyState>
           ) : null}
