@@ -71,8 +71,16 @@ export default function EpisodeRow({
         watched ? 'ring-1 ring-inset ring-accent-500/20' : ''
       } ${isUpcoming ? 'opacity-60' : ''}`}
     >
-      <div className="flex items-start gap-3 sm:gap-4">
-        <div className="relative aspect-video w-28 shrink-0 overflow-hidden rounded-lg bg-base-800 sm:w-40">
+      {/* Stacked (image full-width on top, text below) on mobile, side by
+          side from sm: up. A fixed 112px-wide side-by-side thumbnail left a
+          ton of dead space under it once its height stopped being distorted
+          to match the text column (see items-start above) -- letting the
+          image run the card's full width instead gives it real presence
+          (roughly 3x bigger) and gives the text column enough room that
+          "Show more" is rarely even needed. Desktop keeps the original
+          side-by-side layout, which already had room to spare. */}
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:gap-4">
+        <div className="relative aspect-video w-full overflow-hidden rounded-lg bg-base-800 sm:w-40 sm:shrink-0">
           {still ? (
             <img
               src={still}
@@ -93,22 +101,23 @@ export default function EpisodeRow({
               No image
             </div>
           )}
+          {/* Runtime moved here (off the title row, which no longer needs to
+              share space with it) -- a corner badge on the still is the
+              same place every streaming app already puts it. */}
+          {episode.runtime ? (
+            <span className="absolute bottom-1.5 right-1.5 rounded-md bg-black/70 px-1.5 py-0.5 text-[10px] font-medium text-white backdrop-blur-sm">
+              {episode.runtime}m
+            </span>
+          ) : null}
         </div>
 
         <div className="min-w-0 flex-1">
-          <div className="flex items-start justify-between gap-2">
-            <div className="min-w-0">
-              <p className="text-[11px] font-semibold uppercase tracking-wide text-accent-400">
-                Episode {episode.episode_number}
-              </p>
-              <p className="text-sm font-medium text-base-100 sm:text-base">
-                {episode.name || `Episode ${episode.episode_number}`}
-              </p>
-            </div>
-            {episode.runtime ? (
-              <span className="shrink-0 text-xs text-base-500">{episode.runtime}m</span>
-            ) : null}
-          </div>
+          <p className="text-[11px] font-semibold uppercase tracking-wide text-accent-400">
+            Episode {episode.episode_number}
+          </p>
+          <p className="text-sm font-medium text-base-100 sm:text-base">
+            {episode.name || `Episode ${episode.episode_number}`}
+          </p>
 
           <p
             ref={overviewRef}
