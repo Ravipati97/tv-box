@@ -40,7 +40,7 @@ import { clearStreamingOverride, fetchStreamingOverride, setStreamingOverride } 
 import { invalidatePlatformCache, pickBestFreeProvider } from '../lib/streamingProvider'
 import { addToWatchlist, fetchWatchlistItem, removeFromWatchlist } from '../lib/watchlist'
 import { fetchStartedItem, startShow } from '../lib/showStarted'
-import { undismissShow } from '../lib/showDismissed'
+import { dismissShow, fetchDismissedItem, undismissShow } from '../lib/showDismissed'
 import { deleteRewatch, fetchRewatchesForShow, logRewatch, restoreRewatch } from '../lib/rewatches'
 import { fetchListMembershipForShow } from '../lib/lists'
 import { computeSeasonProgress } from '../lib/seasonProgress'
@@ -53,6 +53,7 @@ import type {
   ShowRatingWithUser,
   ShowRewatch,
   ShowStarted,
+  ShowWatchingDismissed,
   StreamingOverride,
   TmdbProviderListItem,
   TmdbSeasonDetail,
@@ -81,8 +82,9 @@ export default function ShowDetail() {
   const [providers, setProviders] = useState<TmdbWatchProviders | null>(null)
   const [override, setOverride] = useState<StreamingOverride | null>(null)
   const [pickerOpen, setPickerOpen] = useState(false)
-  const [startingWatch, setStartingWatch] = useState(false)
+  const [savingNowWatching, setSavingNowWatching] = useState(false)
   const [started, setStarted] = useState<ShowStarted | null>(null)
+  const [dismissedItem, setDismissedItem] = useState<ShowWatchingDismissed | null>(null)
   const { toast, showUndo, showError, dismiss } = useToast()
   const [watchlistItem, setWatchlistItem] = useState<WatchlistItem | null>(null)
   const [savingWatchlist, setSavingWatchlist] = useState(false)
@@ -109,6 +111,7 @@ export default function ShowDetail() {
           rewatchRows,
           listMembershipSet,
           startedRow,
+          dismissedRow,
         ] = await Promise.all([
           getShowDetail(showId),
           user ? fetchWatchedForShow(user.id, showId) : Promise.resolve({} as WatchedMap),
@@ -118,6 +121,7 @@ export default function ShowDetail() {
           user ? fetchRewatchesForShow(user.id, showId) : Promise.resolve([]),
           user ? fetchListMembershipForShow(user.id, showId) : Promise.resolve(new Set<string>()),
           user ? fetchStartedItem(user.id, showId) : Promise.resolve(null),
+          user ? fetchDismissedItem(user.id, showId) : Promise.resolve(null),
         ])
         if (cancelled) return
         setShow(showData)
@@ -128,6 +132,7 @@ export default function ShowDetail() {
         setRewatches(rewatchRows)
         setListMembership(listMembershipSet)
         setStarted(startedRow)
+        setDismissedItem(dismissedRow)
         // Default to whichever season you're actually on -- the first one
         // that isn't fully watched yet (same "current season" logic Home's
         // Now Watching card already uses), not always Season 1. Falls back
@@ -239,6 +244,13 @@ export default function ShowDetail() {
   const watchedCount = Object.keys(watched).length
   const totalEpisodes = show?.number_of_episodes ?? null
 
+  // Mirrors nowWatching()'s own filter in lib/showActivity.ts -- kept as a
+  // simple boolean here (rather than importing that function) since this
+  // only ever needs to know about the one show already loaded on this page.
+  const isFinished = totalEpisodes !== null && watchedCount >= totalEpisodes
+  const inNowWatching = (started !== null || watchedCount > 0) && !dismissedItem && !isFinished
+  const canTrackNowWatching = totalEpisodes !== null && totalEpisodes > 0 && !isFinished
+
   const seasonWatchedCount = useMemo(() => {
     if (!season) return null
     return season.episodes.filter((ep) => watched[watchedKey(ep.season_number, ep.episode_number)]).length
@@ -282,9 +294,11 @@ export default function ShowDetail() {
    * on Home until removed and re-added another way. */
   function clearDismissed() {
     if (!user || !show) return
-    undismissShow(user.id, show.id).catch(() => {
-      // Best-effort, see comment above -- fail silently.
-    })
+    undismissShow(user.id, show.id)
+      .then(() => setDismissedItem(null))
+      .catch(() => {
+        // Best-effort, see comment above -- fail silently.
+      })
   }
 
   async function handleToggleWatched(episodeNumber: number, episodeName: string, runtimeMinutes: number | null) {
@@ -476,7 +490,7 @@ export default function ShowDetail() {
    * actions it skips the date picker entirely. */
   async function handleStartWatching() {
     if (!user || !show) return
-    setStartingWatch(true)
+    setSavingNowWatching(true)
     try {
       const row = await startShow({
         userId: user.id,
@@ -490,8 +504,73 @@ export default function ShowDetail() {
     } catch {
       showError('Failed to start watching. Try again.')
     } finally {
-      setStartingWatch(false)
+      setSavingNowWatching(false)
     }
+  }
+
+  /** Un-hides a show that already has real progress or a "started"
+   * declaration but was previously removed from Now Watching -- the
+   * dismissed-but-not-brand-new counterpart to handleStartWatching above.
+   * Deliberate user action (clicking the toggle), so unlike clearDismissed
+   * this reports a failure instead of swallowing it. */
+  async function handleAddBackToNowWatching() {
+    if (!user || !show) return
+    setSavingNowWatching(true)
+    const previous = dismissedItem
+    setDismissedItem(null)
+    try {
+      await undismissShow(user.id, show.id)
+    } catch {
+      setDismissedItem(previous)
+      showError('Failed to add back to Now Watching. Try again.')
+    } finally {
+      setSavingNowWatching(false)
+    }
+  }
+
+  /** "Remove from Now Watching" -- the toggle's other direction. Hides the
+   * show from Home without touching show_started/episode_watched (see
+   * lib/showDismissed.ts); resuming the show from any of the actions above
+   * (clearDismissed) brings it back automatically, so this is a soft "not
+   * right now" rather than a hard reset. Same optimistic + Undo shape as
+   * every other reversible action on this page. */
+  async function handleRemoveFromNowWatching() {
+    if (!user || !show) return
+    setSavingNowWatching(true)
+    const previous = dismissedItem
+    setDismissedItem({
+      id: `optimistic-${show.id}`,
+      user_id: user.id,
+      show_id: show.id,
+      dismissed_at: new Date().toISOString(),
+    })
+    try {
+      const row = await dismissShow(user.id, show.id)
+      setDismissedItem(row)
+    } catch {
+      setDismissedItem(previous)
+      showError('Failed to remove from Now Watching. Try again.')
+      return
+    } finally {
+      setSavingNowWatching(false)
+    }
+    showUndo('Removed from Now Watching', async () => {
+      try {
+        await undismissShow(user.id, show.id)
+        setDismissedItem(null)
+      } catch {
+        showError('Failed to undo. Try again.')
+      }
+    })
+  }
+
+  /** Single entry point for the Now Watching pill in the quick-actions row --
+   * picks the right one of the three handlers above based on current state,
+   * so the button itself doesn't need to know the underlying model. */
+  function handleToggleNowWatching() {
+    if (inNowWatching) handleRemoveFromNowWatching()
+    else if (dismissedItem) handleAddBackToNowWatching()
+    else handleStartWatching()
   }
 
   /** Same idea as handleToggleWatched, but for logging a single episode on a
@@ -850,10 +929,30 @@ export default function ShowDetail() {
           </div>
         )}
 
-        {/* Quick actions: watchlist toggle -- independent of watch progress,
-            so it's available whether or not you've started the show. */}
+        {/* Quick actions: Now Watching / watchlist / list toggles -- all
+            independent of each other and available regardless of progress. */}
         {show && !loadingShow && (
           <div className="mt-3 flex flex-wrap items-center gap-2">
+            {canTrackNowWatching && (
+              <button
+                type="button"
+                onClick={handleToggleNowWatching}
+                disabled={savingNowWatching}
+                className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-medium transition-colors duration-200 disabled:opacity-60 ${
+                  inNowWatching
+                    ? 'border-accent-500/40 bg-accent-500/15 text-accent-300'
+                    : 'border-hairline-strong text-base-400 hover:border-accent-500/40 hover:text-base-200'
+                }`}
+              >
+                <PlayGlyph filled={inNowWatching} />
+                {inNowWatching
+                  ? 'Remove from Now Watching'
+                  : dismissedItem
+                    ? 'Add to Now Watching'
+                    : 'Start watching'}
+              </button>
+            )}
+
             <button
               type="button"
               onClick={handleToggleWatchlist}
@@ -918,16 +1017,6 @@ export default function ShowDetail() {
             </div>
             {watchedCount < totalEpisodes && (
               <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1.5">
-                {watchedCount === 0 && !started && (
-                  <button
-                    type="button"
-                    onClick={handleStartWatching}
-                    disabled={startingWatch}
-                    className="text-xs text-accent-400 hover:underline disabled:opacity-60"
-                  >
-                    {startingWatch ? 'Adding…' : 'Start watching'}
-                  </button>
-                )}
                 <DateMarkControl
                   label="Seen this before? Mark it all watched"
                   onConfirm={handleMarkAllWatched}
@@ -1150,6 +1239,26 @@ function ListGlyph() {
         stroke="currentColor"
         strokeWidth="1.8"
         strokeLinecap="round"
+      />
+    </svg>
+  )
+}
+
+function PlayGlyph({ filled }: { filled: boolean }) {
+  return (
+    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" className="shrink-0">
+      <circle
+        cx="12"
+        cy="12"
+        r="9"
+        fill={filled ? 'var(--color-accent-400)' : 'none'}
+        stroke={filled ? 'var(--color-accent-400)' : 'currentColor'}
+        strokeWidth="1.6"
+      />
+      <path
+        d="M10 8.5l6 3.5-6 3.5v-7Z"
+        fill={filled ? 'var(--color-base-950)' : 'currentColor'}
+        stroke="none"
       />
     </svg>
   )

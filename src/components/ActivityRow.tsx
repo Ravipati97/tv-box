@@ -35,7 +35,19 @@ export default function ActivityRow({ event }: { event: GroupActivityEvent }) {
       <div className="min-w-0 flex-1">
         <p className="truncate text-sm text-base-200">
           <span className="font-medium text-base-100">@{event.username}</span>{' '}
-          {event.finished ? 'finished' : 'rated'} <span className="font-medium">{event.showName}</span>
+          {event.finished ? (
+            <>
+              finished <span className="font-medium">{event.showName}</span>
+            </>
+          ) : event.seasonNumber !== null ? (
+            <>
+              rated <span className="font-medium">{event.showName}</span> Season {event.seasonNumber}
+            </>
+          ) : (
+            <>
+              rated <span className="font-medium">{event.showName}</span>
+            </>
+          )}
         </p>
         <p className="text-xs text-base-500">
           {event.atUnknown ? 'a while ago' : formatShortDate(event.at)}

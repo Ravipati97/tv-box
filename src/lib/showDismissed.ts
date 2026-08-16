@@ -11,6 +11,21 @@ export async function fetchDismissedForUser(userId: string): Promise<ShowWatchin
   return (data ?? []) as ShowWatchingDismissed[]
 }
 
+/** One user's dismissed status for a single show, or null if it's currently
+ * showing in Now Watching (or was never in it). Powers the toggle on the
+ * show's own page -- see ShowDetail.tsx. */
+export async function fetchDismissedItem(userId: string, showId: number): Promise<ShowWatchingDismissed | null> {
+  const { data, error } = await supabase
+    .from('show_watching_dismissed')
+    .select('*')
+    .eq('user_id', userId)
+    .eq('show_id', showId)
+    .maybeSingle()
+
+  if (error) throw error
+  return (data as ShowWatchingDismissed) ?? null
+}
+
 /** "Remove from Now Watching" -- hides the show without touching
  * show_started or episode_watched. Upsert (not insert) since re-dismissing
  * an already-dismissed show should just no-op cleanly. */

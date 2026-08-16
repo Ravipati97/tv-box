@@ -3,24 +3,23 @@ import { Link } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import { useAuth } from '../contexts/AuthContext'
 import { fetchRecentShowRatings, fetchRecentShowRatingsAllUsers } from '../lib/showRatings'
+import { fetchRecentSeasonRatingsAllUsers } from '../lib/seasonRatings'
 import { fetchRecentWatched, fetchRecentWatchedAllUsers } from '../lib/watched'
 import { fetchStartedForUser } from '../lib/showStarted'
-import { dismissShow, fetchDismissedForUser, undismissShow } from '../lib/showDismissed'
-import { summarizeShowActivity, nowWatching, watchHistory, buildGroupActivity } from '../lib/showActivity'
+import { fetchDismissedForUser } from '../lib/showDismissed'
+import { fetchWatchlist } from '../lib/watchlist'
+import { summarizeShowActivity, nowWatching, buildGroupActivity } from '../lib/showActivity'
 import type { GroupActivityEvent } from '../lib/showActivity'
 import { computeSeasonProgress, fetchNextEpisode, fetchSeasonBreakdowns } from '../lib/seasonProgress'
 import type { NextEpisode, SeasonProgress } from '../lib/seasonProgress'
 import { useStreamingPlatforms } from '../hooks/useStreamingPlatforms'
 import { posterUrl } from '../lib/tmdb'
 import { formatShortDate } from '../lib/date'
-import HistorySection from '../components/HistorySection'
 import ActivityRow from '../components/ActivityRow'
 import SeasonProgressBar from '../components/SeasonProgressBar'
 import StreamingBadge from '../components/StreamingBadge'
-import Toast from '../components/Toast'
-import { useToast } from '../hooks/useToast'
 import { ShowGridSkeleton } from '../components/Skeletons'
-import type { EpisodeWatched, ShowRating, ShowStarted, ShowWatchingDismissed } from '../types'
+import type { EpisodeWatched, ShowRating, ShowStarted, ShowWatchingDismissed, WatchlistItem } from '../types'
 
 function greeting(): string {
   const hour = new Date().getHours()
@@ -36,9 +35,9 @@ export default function Home() {
   const [watched, setWatched] = useState<EpisodeWatched[]>([])
   const [started, setStarted] = useState<ShowStarted[]>([])
   const [dismissed, setDismissed] = useState<ShowWatchingDismissed[]>([])
+  const [watchlist, setWatchlist] = useState<WatchlistItem[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const { toast, showUndo, showError, dismiss } = useToast()
 
   const [groupActivity, setGroupActivity] = useState<GroupActivityEvent[]>([])
   const [loadingGroup, setLoadingGroup] = useState(true)
@@ -53,13 +52,15 @@ export default function Home() {
       fetchRecentWatched(user.id, 2000),
       fetchStartedForUser(user.id),
       fetchDismissedForUser(user.id),
+      fetchWatchlist(user.id),
     ])
-      .then(([ratingRows, watchedRows, startedRows, dismissedRows]) => {
+      .then(([ratingRows, watchedRows, startedRows, dismissedRows, watchlistRows]) => {
         if (!cancelled) {
           setRatings(ratingRows)
           setWatched(watchedRows)
           setStarted(startedRows)
           setDismissed(dismissedRows)
+          setWatchlist(watchlistRows)
         }
       })
       .catch((err) => {
@@ -76,9 +77,13 @@ export default function Home() {
   useEffect(() => {
     let cancelled = false
     setLoadingGroup(true)
-    Promise.all([fetchRecentShowRatingsAllUsers(150), fetchRecentWatchedAllUsers(400)])
-      .then(([ratingRows, watchedRows]) => {
-        if (!cancelled) setGroupActivity(buildGroupActivity(ratingRows, watchedRows))
+    Promise.all([
+      fetchRecentShowRatingsAllUsers(150),
+      fetchRecentWatchedAllUsers(400),
+      fetchRecentSeasonRatingsAllUsers(150),
+    ])
+      .then(([ratingRows, watchedRows, seasonRatingRows]) => {
+        if (!cancelled) setGroupActivity(buildGroupActivity(ratingRows, watchedRows, seasonRatingRows))
       })
       .catch(() => {
         // The teaser is a nice-to-have -- fail quietly, the full page will surface errors.
@@ -96,40 +101,7 @@ export default function Home() {
     [ratings, watched, started, dismissed],
   )
   const watching = useMemo(() => nowWatching(activity), [activity])
-  const history = useMemo(() => watchHistory(activity), [activity])
   const recentGroupActivity = groupActivity.slice(0, 5)
-
-  /** "Remove from Now Watching" -- hides the card without touching real
-   * watch history (episode_watched/show_started rows are untouched, see
-   * lib/showDismissed.ts). Optimistic + Undo, same pattern as every other
-   * remove action in the app -- the dismissed row also self-clears if the
-   * show is ever resumed from its detail page. */
-  async function handleRemoveFromWatching(showId: number) {
-    if (!user) return
-    const previous = dismissed
-    const optimisticRow: ShowWatchingDismissed = {
-      id: `optimistic-${showId}`,
-      user_id: user.id,
-      show_id: showId,
-      dismissed_at: new Date().toISOString(),
-    }
-    setDismissed((prev) => [...prev, optimisticRow])
-    try {
-      await dismissShow(user.id, showId)
-    } catch {
-      setDismissed(previous)
-      showError('Failed to remove from Now Watching. Try again.')
-      return
-    }
-    showUndo('Removed from Now Watching', async () => {
-      try {
-        await undismissShow(user.id, showId)
-        setDismissed((prev) => prev.filter((d) => d.show_id !== showId))
-      } catch {
-        showError('Failed to undo. Try removing it again.')
-      }
-    })
-  }
 
   // Per-season watched counts for everything in progress -- lets the card
   // below say "Season 4 · 2/10" instead of a flat, hard-to-parse "10/44".
@@ -250,9 +222,8 @@ export default function Home() {
                 initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.3, delay: Math.min(i, 12) * 0.02 }}
-                className="group relative"
               >
-                <Link to={`/show/${s.showId}`} className="block">
+                <Link to={`/show/${s.showId}`} className="group block">
                   <div className="relative aspect-[2/3] overflow-hidden rounded-2xl bg-base-800 ring-1 ring-hairline transition-all duration-300 group-hover:-translate-y-0.5 group-hover:shadow-[0_12px_32px_-8px_rgba(139,92,246,0.35)]">
                     {s.showPosterPath ? (
                       <img
@@ -294,29 +265,55 @@ export default function Home() {
                     />
                   </div>
                 </Link>
-                <button
-                  type="button"
-                  onClick={() => handleRemoveFromWatching(s.showId)}
-                  className="absolute right-1.5 top-1.5 flex h-6 w-6 items-center justify-center rounded-full bg-black/60 text-xs text-white opacity-0 backdrop-blur-sm transition-opacity duration-200 group-hover:opacity-100"
-                  aria-label={`Remove ${s.showName} from Now Watching`}
-                >
-                  ×
-                </button>
               </motion.div>
             )
           })}
         </div>
       )}
 
-      {/* History -- everything finished or rated, right below what's in progress. */}
-      {!loading && history.length > 0 && (
+      {/* Watchlist -- shows saved for later, right below what's in progress.
+          History moved off Home entirely (still on Profile) -- removing a
+          show from Now Watching is now handled from the show's own page
+          (see ShowDetail.tsx), so it no longer needs a matching "finished"
+          list here to explain where things went. */}
+      {!loading && watchlist.length > 0 && (
         <div className="mt-12">
-          <h2 className="font-display mb-4 text-lg font-semibold text-base-100">Your History</h2>
-          <HistorySection
-            activity={history}
-            username={user?.username ?? ''}
-            emptyMessage="Nothing finished yet."
-          />
+          <div className="mb-4 flex items-center justify-between">
+            <h2 className="font-display text-lg font-semibold text-base-100">Your Watchlist</h2>
+            <Link to="/profile" className="text-xs font-medium text-accent-400 hover:underline">
+              See all &rarr;
+            </Link>
+          </div>
+          <div className="grid grid-cols-2 gap-x-4 gap-y-6 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
+            {watchlist.map((w, i) => (
+              <motion.div
+                key={w.id}
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.3, delay: Math.min(i, 12) * 0.02 }}
+              >
+                <Link to={`/show/${w.show_id}`} className="group block">
+                  <div className="relative aspect-[2/3] overflow-hidden rounded-2xl bg-base-800 ring-1 ring-hairline transition-all duration-300 group-hover:-translate-y-0.5 group-hover:shadow-[0_12px_32px_-8px_rgba(139,92,246,0.35)]">
+                    {w.show_poster_path ? (
+                      <img
+                        src={posterUrl(w.show_poster_path) ?? undefined}
+                        alt={w.show_name}
+                        loading="lazy"
+                        decoding="async"
+                        className="h-full w-full object-cover transition-transform duration-500 ease-out group-hover:scale-[1.06]"
+                      />
+                    ) : (
+                      <div className="flex h-full w-full items-center justify-center p-3 text-center text-xs text-base-400">
+                        {w.show_name}
+                      </div>
+                    )}
+                  </div>
+                  <p className="mt-2 truncate text-sm font-medium text-base-100">{w.show_name}</p>
+                  <p className="text-xs text-base-400">Added {formatShortDate(w.added_at)}</p>
+                </Link>
+              </motion.div>
+            ))}
+          </div>
         </div>
       )}
 
@@ -344,8 +341,6 @@ export default function Home() {
           )}
         </div>
       )}
-
-      {toast && <Toast message={toast.message} tone={toast.tone} action={toast.action} onDismiss={dismiss} />}
     </div>
   )
 }

@@ -2,6 +2,7 @@ import { dayKey } from './date'
 import type {
   EpisodeWatched,
   EpisodeWatchedWithUser,
+  SeasonRatingWithUser,
   ShowRating,
   ShowRatingWithUser,
   ShowRewatch,
@@ -323,6 +324,9 @@ export interface GroupActivityEvent {
   rating: number | null
   finished: boolean
   episodeCount: number | null
+  /** Set only for a season-level rating event -- distinguishes "rated
+   * Season 2" from a show-level "rated" event, which leaves this null. */
+  seasonNumber: number | null
   /** finishedAt if finished, otherwise ratedAt -- when this event "happened". */
   at: string
   atUnknown: boolean
@@ -334,11 +338,16 @@ export interface GroupActivityEvent {
  * summarizeShowActivity + watchHistory per-user (grouping the flat
  * multi-user rows first) so the semantics exactly match each person's own
  * History tab -- a show only ever shows up here once it would show up
- * there too.
+ * there too. Season ratings are appended separately (see below) since
+ * they're independent of a show's overall watch/rating state -- someone can
+ * rate a season without that changing whether the show itself would show up
+ * in their History tab, so routing them through the same
+ * summarizeShowActivity/watchHistory filter would drop most of them.
  */
 export function buildGroupActivity(
   ratings: ShowRatingWithUser[],
   watched: EpisodeWatchedWithUser[],
+  seasonRatings: SeasonRatingWithUser[] = [],
 ): GroupActivityEvent[] {
   interface UserBucket {
     username: string
@@ -377,10 +386,30 @@ export function buildGroupActivity(
         rating: s.rating,
         finished: s.finished,
         episodeCount: s.finished ? s.totalEpisodes : null,
+        seasonNumber: null,
         at,
         atUnknown: s.finished ? s.finishedAtUnknown : false,
       })
     }
+  }
+
+  // Appended directly rather than bucketed above -- a season rating always
+  // shows up here regardless of the show's overall progress/rating state.
+  for (const sr of seasonRatings) {
+    events.push({
+      key: `${sr.user_id}-${sr.show_id}-season-${sr.season_number}`,
+      userId: sr.user_id,
+      username: sr.users?.username ?? 'unknown',
+      showId: sr.show_id,
+      showName: sr.show_name,
+      showPosterPath: sr.show_poster_path,
+      rating: sr.rating,
+      finished: false,
+      episodeCount: null,
+      seasonNumber: sr.season_number,
+      at: sr.rated_at,
+      atUnknown: false,
+    })
   }
 
   events.sort((a, b) => b.at.localeCompare(a.at))

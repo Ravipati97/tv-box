@@ -14,6 +14,20 @@ export async function fetchAllSeasonRatingsForShow(showId: number): Promise<Seas
   return (data ?? []) as unknown as SeasonRatingWithUser[]
 }
 
+/** Most recent season ratings across the whole group (every user), for the
+ * group Activity feed -- same shape/purpose as fetchRecentShowRatingsAllUsers
+ * in lib/showRatings.ts, just for the season-level table. */
+export async function fetchRecentSeasonRatingsAllUsers(limit = 500): Promise<SeasonRatingWithUser[]> {
+  const { data, error } = await supabase
+    .from('season_ratings')
+    .select('*, users(username)')
+    .order('rated_at', { ascending: false })
+    .limit(limit)
+
+  if (error) throw error
+  return (data ?? []) as unknown as SeasonRatingWithUser[]
+}
+
 export interface UpsertSeasonRatingInput {
   userId: string
   showId: number

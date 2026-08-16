@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import type { ReactNode } from 'react'
 import { motion } from 'framer-motion'
 import { fetchRecentShowRatingsAllUsers } from '../lib/showRatings'
+import { fetchRecentSeasonRatingsAllUsers } from '../lib/seasonRatings'
 import { fetchRecentWatchedAllUsers } from '../lib/watched'
 import { buildGroupActivity } from '../lib/showActivity'
 import type { GroupActivityEvent } from '../lib/showActivity'
@@ -28,10 +29,15 @@ export default function Activity() {
     let cancelled = false
     setLoading(true)
     setError(null)
-    Promise.all([fetchRecentShowRatingsAllUsers(500), fetchRecentWatchedAllUsers(1500), fetchAllUsers()])
-      .then(([ratingRows, watchedRows, users]) => {
+    Promise.all([
+      fetchRecentShowRatingsAllUsers(500),
+      fetchRecentWatchedAllUsers(1500),
+      fetchRecentSeasonRatingsAllUsers(500),
+      fetchAllUsers(),
+    ])
+      .then(([ratingRows, watchedRows, seasonRatingRows, users]) => {
         if (!cancelled) {
-          setEvents(buildGroupActivity(ratingRows, watchedRows))
+          setEvents(buildGroupActivity(ratingRows, watchedRows, seasonRatingRows))
           setMembers(users)
         }
       })
