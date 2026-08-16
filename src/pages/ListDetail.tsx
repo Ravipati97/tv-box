@@ -19,6 +19,7 @@ export default function ListDetail() {
   const [list, setList] = useState<ShowList | null | undefined>(undefined)
   const [items, setItems] = useState<ShowListItem[]>([])
   const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState<string | null>(null)
   // Deleting a list is permanent and takes every item on it with it -- an
   // inline "are you sure" step (no native confirm(), same reasoning as
   // DateMarkControl) is the guard against one mis-tap wiping it out.
@@ -32,6 +33,7 @@ export default function ListDetail() {
     if (!username || !listId) return
     let cancelled = false
     setLoading(true)
+    setLoadError(null)
     Promise.all([fetchUserByUsername(username), fetchList(listId), fetchListItems(listId)])
       .then(([userRow, listRow, itemRows]) => {
         if (cancelled) return
@@ -48,6 +50,9 @@ export default function ListDetail() {
         }
         setList(listRow)
         setItems(itemRows)
+      })
+      .catch((err) => {
+        if (!cancelled) setLoadError(err instanceof Error ? err.message : 'Failed to load this list.')
       })
       .finally(() => {
         if (!cancelled) setLoading(false)
@@ -101,10 +106,10 @@ export default function ListDetail() {
     }
   }
 
-  if (!loading && (profile === null || list === null)) {
+  if (!loading && (loadError || profile === null || list === null)) {
     return (
       <div className="mx-auto max-w-3xl px-4 pb-24 pt-16 text-center sm:px-6">
-        <p className="text-sm text-base-500">List not found.</p>
+        <p className="text-sm text-base-500">{loadError ?? 'List not found.'}</p>
         <Link to="/members" className="mt-3 inline-block text-sm text-accent-400 hover:underline">
           &larr; Back to members
         </Link>
@@ -205,7 +210,12 @@ export default function ListDetail() {
                       <button
                         type="button"
                         onClick={() => handleRemove(item)}
-                        className="absolute right-1.5 top-1.5 flex h-6 w-6 items-center justify-center rounded-full bg-black/60 text-xs text-white opacity-0 backdrop-blur-sm transition-opacity duration-200 group-hover:opacity-100"
+                        // Visible by default, hover-gated only from sm: up --
+                        // opacity-0-until-hover has no equivalent on a touch
+                        // screen (there's no persistent hover state to reveal
+                        // it), so a phone would never be able to find or tap
+                        // this at all if it stayed hidden below that breakpoint.
+                        className="absolute right-1.5 top-1.5 flex h-7 w-7 items-center justify-center rounded-full bg-black/60 text-sm text-white backdrop-blur-sm transition-opacity duration-200 sm:h-6 sm:w-6 sm:text-xs sm:opacity-0 sm:group-hover:opacity-100"
                         aria-label={`Remove ${item.show_name} from this list`}
                       >
                         ×

@@ -18,7 +18,7 @@ export default function StreamingBadge({ provider }: { provider: ResolvedProvide
       title={provider.provider_name}
       className="absolute right-1.5 top-1.5 h-6 w-6 overflow-hidden rounded-md shadow-md ring-1 ring-black/30"
     >
-      <img src={logo} alt="" className="h-full w-full object-cover" />
+      <img src={logo} alt="" loading="lazy" decoding="async" className="h-full w-full object-cover" />
     </div>
   )
 }

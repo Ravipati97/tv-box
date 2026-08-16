@@ -1,5 +1,6 @@
 import { useEffect } from 'react'
 import { useLocation, useNavigationType } from 'react-router-dom'
+import { scrollBehavior } from '../lib/motion'
 
 const STORAGE_PREFIX = 'scrollpos:'
 
@@ -34,7 +35,7 @@ export function useScrollRestoration() {
       // restore below stays instant on purpose: it calls scrollTo up to 60
       // times while content is still loading in, and animating each of
       // those would fight itself into a stutter instead of landing cleanly.
-      window.scrollTo({ top: 0, left: 0, behavior: 'smooth' })
+      window.scrollTo({ top: 0, left: 0, behavior: scrollBehavior() })
       return
     }
     const raw = sessionStorage.getItem(STORAGE_PREFIX + location.key)

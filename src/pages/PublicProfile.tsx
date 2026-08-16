@@ -9,25 +9,33 @@ export default function PublicProfile() {
   const { username } = useParams<{ username: string }>()
   const { user: me } = useAuth()
   const [profile, setProfile] = useState<AppUser | null | undefined>(undefined) // undefined = loading
+  const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
     if (!username) return
     let cancelled = false
     setProfile(undefined)
+    setError(null)
 
-    fetchUserByUsername(username).then((found) => {
-      if (!cancelled) setProfile(found)
-    })
+    fetchUserByUsername(username)
+      .then((found) => {
+        if (!cancelled) setProfile(found)
+      })
+      .catch((err) => {
+        if (!cancelled) setError(err instanceof Error ? err.message : 'Failed to load this member.')
+      })
 
     return () => {
       cancelled = true
     }
   }, [username])
 
-  if (profile === null) {
+  if (error || profile === null) {
     return (
       <div className="mx-auto max-w-3xl px-4 pb-24 pt-16 text-center sm:px-6">
-        <p className="text-sm text-base-500">No member found with username “{username}”.</p>
+        <p className="text-sm text-base-500">
+          {error ?? `No member found with username “${username}”.`}
+        </p>
         <Link to="/members" className="mt-3 inline-block text-sm text-accent-400 hover:underline">
           &larr; Back to members
         </Link>

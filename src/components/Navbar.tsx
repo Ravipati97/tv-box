@@ -1,6 +1,7 @@
 import { NavLink, useLocation } from 'react-router-dom'
 import { AnimatePresence, motion } from 'framer-motion'
 import { useTheme } from '../contexts/ThemeContext'
+import { scrollBehavior } from '../lib/motion'
 
 const linkBase =
   'relative flex flex-col items-center justify-center gap-0.5 text-[11px] font-medium transition-colors duration-200 md:flex-row md:gap-1.5 md:text-sm md:px-3.5 md:py-1.5 md:rounded-full'
@@ -162,7 +163,7 @@ export default function Navbar() {
   // effects at all.
   function handleNavClick(to: string) {
     if (location.pathname === to) {
-      window.scrollTo({ top: 0, left: 0, behavior: 'smooth' })
+      window.scrollTo({ top: 0, left: 0, behavior: scrollBehavior() })
     }
   }
 

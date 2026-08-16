@@ -28,6 +28,7 @@ export default function AddToListPicker({
   onClose: () => void
 }) {
   const [lists, setLists] = useState<ShowListWithCount[] | null>(null)
+  const [loadError, setLoadError] = useState(false)
   const [creating, setCreating] = useState(false)
   const [newName, setNewName] = useState('')
   const [savingId, setSavingId] = useState<string | null>(null)
@@ -43,9 +44,14 @@ export default function AddToListPicker({
 
   useEffect(() => {
     let cancelled = false
-    fetchListsForUser(userId).then((data) => {
-      if (!cancelled) setLists(data)
-    })
+    setLoadError(false)
+    fetchListsForUser(userId)
+      .then((data) => {
+        if (!cancelled) setLists(data)
+      })
+      .catch(() => {
+        if (!cancelled) setLoadError(true)
+      })
     return () => {
       cancelled = true
     }
@@ -139,7 +145,9 @@ export default function AddToListPicker({
 
         <div className="mt-2 max-h-56 overflow-y-auto">
           {lists === null ? (
-            <p className="px-1 py-2 text-xs text-base-500">Loading your lists…</p>
+            <p className="px-1 py-2 text-xs text-base-500">
+              {loadError ? "Couldn't load your lists. Try closing and reopening this panel." : 'Loading your lists…'}
+            </p>
           ) : lists.length === 0 ? (
             <p className="px-1 py-2 text-xs text-base-500">No lists yet -- create your first one below.</p>
           ) : (

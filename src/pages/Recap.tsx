@@ -16,12 +16,14 @@ export default function Recap() {
   const [watched, setWatched] = useState<EpisodeWatched[]>([])
   const [rewatches, setRewatches] = useState<ShowRewatch[]>([])
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
   const [year, setYear] = useState<number | null>(null)
 
   useEffect(() => {
     if (!user) return
     let cancelled = false
     setLoading(true)
+    setError(null)
     Promise.all([
       fetchRecentShowRatings(user.id, 5000),
       fetchRecentWatched(user.id, 5000),
@@ -32,6 +34,9 @@ export default function Recap() {
         setRatings(r)
         setWatched(w)
         setRewatches(rw)
+      })
+      .catch((err) => {
+        if (!cancelled) setError(err instanceof Error ? err.message : 'Failed to load your recap.')
       })
       .finally(() => {
         if (!cancelled) setLoading(false)
@@ -90,15 +95,19 @@ export default function Recap() {
             <div key={i} className="h-20 animate-pulse rounded-xl bg-base-850/70" />
           ))}
         </div>
-      ) : !recap || years.length === 0 ? (
+      ) : error || !recap || years.length === 0 ? (
         <div className="mt-10 flex flex-col items-center rounded-2xl border border-hairline bg-base-850/40 px-6 py-14 text-center">
-          <div className="mb-3 text-4xl">🎬</div>
+          <div className="mb-3 text-4xl">{error ? '⚠️' : '🎬'}</div>
           <p className="max-w-xs text-sm text-base-500">
-            Nothing tracked yet.{' '}
-            <Link to="/search" className="text-accent-400 hover:underline">
-              Find a show
-            </Link>{' '}
-            to get started.
+            {error ?? (
+              <>
+                Nothing tracked yet.{' '}
+                <Link to="/search" className="text-accent-400 hover:underline">
+                  Find a show
+                </Link>{' '}
+                to get started.
+              </>
+            )}
           </p>
         </div>
       ) : (

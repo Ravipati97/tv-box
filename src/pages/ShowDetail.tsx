@@ -1372,6 +1372,8 @@ function ProviderPicker({
                     <img
                       src={providerLogoUrl(p.logo_path) ?? undefined}
                       alt={p.provider_name}
+                      loading="lazy"
+                      decoding="async"
                       className="h-full w-full object-cover"
                     />
                   ) : null}

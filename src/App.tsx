@@ -1,12 +1,13 @@
 import { lazy, Suspense, useState } from 'react'
 import type { ReactNode } from 'react'
 import { HashRouter, Navigate, Route, Routes, useLocation } from 'react-router-dom'
-import { AnimatePresence } from 'framer-motion'
+import { AnimatePresence, MotionConfig } from 'framer-motion'
 import { AuthProvider, useAuth } from './contexts/AuthContext'
 import { ThemeProvider } from './contexts/ThemeContext'
 import ProtectedRoute from './components/ProtectedRoute'
 import Navbar from './components/Navbar'
 import PasscodeGate from './components/PasscodeGate'
+import ErrorBoundary from './components/ErrorBoundary'
 import { hasPassedGate, isGateConfigured } from './lib/siteGate'
 import { useScrollRestoration } from './hooks/useScrollRestoration'
 import Login from './pages/Login'
@@ -194,12 +195,20 @@ function AppShell() {
 
 export default function App() {
   return (
-    <ThemeProvider>
-      <HashRouter>
-        <AuthProvider>
-          <AppShell />
-        </AuthProvider>
-      </HashRouter>
-    </ThemeProvider>
+    // "user" respects the OS-level prefers-reduced-motion setting for every
+    // motion.* element in the app (crossfades instead of the usual
+    // slide/scale), without having to thread a check through each of them
+    // individually -- see https://motion.dev/docs/react-motion-config.
+    <ErrorBoundary>
+      <MotionConfig reducedMotion="user">
+        <ThemeProvider>
+          <HashRouter>
+            <AuthProvider>
+              <AppShell />
+            </AuthProvider>
+          </HashRouter>
+        </ThemeProvider>
+      </MotionConfig>
+    </ErrorBoundary>
   )
 }
