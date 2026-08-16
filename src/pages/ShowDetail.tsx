@@ -209,6 +209,15 @@ export default function ShowDetail() {
     }
   }, [show])
 
+  /** TVmaze's correction for one episode's air date, or its own TMDB date
+   * unchanged if there's no match -- see lib/tvmaze.ts. Single lookup point
+   * shared by the "next episode" banner and every EpisodeRow below, so the
+   * two can never disagree. */
+  function effectiveAirDate(ep: { season_number: number; episode_number: number; air_date: string | null }): string | null {
+    if (!ep.air_date) return null
+    return correctedAirDates.get(tvmazeEpisodeKey(ep.season_number, ep.episode_number)) ?? ep.air_date
+  }
+
   const region = useMemo(() => detectRegion(), [])
   const regionProviders = providers?.results[region] ?? null
 
@@ -239,8 +248,8 @@ export default function ShowDetail() {
     if (!season) return null
     const ep = season.episodes.find((e) => e.air_date && isFutureDate(e.air_date)) ?? null
     if (!ep) return null
-    const corrected = correctedAirDates.get(tvmazeEpisodeKey(ep.season_number, ep.episode_number))
-    return corrected ? { ...ep, air_date: corrected } : ep
+    return { ...ep, air_date: effectiveAirDate(ep) }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- effectiveAirDate closes over correctedAirDates, already a dep below
   }, [season, correctedAirDates])
 
   const myShowRating = useMemo(
@@ -982,16 +991,7 @@ export default function ShowDetail() {
                 : season?.episodes.map((ep) => (
                     <EpisodeRow
                       key={ep.id}
-                      episode={
-                        ep.air_date
-                          ? {
-                              ...ep,
-                              air_date:
-                                correctedAirDates.get(tvmazeEpisodeKey(ep.season_number, ep.episode_number)) ??
-                                ep.air_date,
-                            }
-                          : ep
-                      }
+                      episode={ep.air_date ? { ...ep, air_date: effectiveAirDate(ep) } : ep}
                       watched={Boolean(watched[watchedKey(ep.season_number, ep.episode_number)])}
                       watchedAt={watched[watchedKey(ep.season_number, ep.episode_number)]?.watched_at ?? null}
                       watchedAtUnknown={Boolean(

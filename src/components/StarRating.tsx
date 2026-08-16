@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useId, useState } from 'react'
 import { motion } from 'framer-motion'
 
 interface StarRatingProps {
@@ -18,7 +18,10 @@ const SIZE_MAP: Record<NonNullable<StarRatingProps['size']>, number> = {
 
 function Star({ fill, px }: { fill: number; px: number }) {
   // fill: 0, 0.5, or 1
-  const clipId = `star-clip-${px}-${fill}-${Math.random().toString(36).slice(2, 8)}`
+  // useId (not Math.random()) -- stable across re-renders and guaranteed
+  // unique even with several StarRating instances on screen at once (e.g.
+  // ShowDetail's show + season ratings, both mounted simultaneously).
+  const clipId = useId()
   return (
     <svg width={px} height={px} viewBox="0 0 24 24" className="pointer-events-none block">
       <defs>
