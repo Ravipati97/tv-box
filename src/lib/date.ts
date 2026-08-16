@@ -22,9 +22,21 @@ export function formatDiaryHeading(iso: string): string {
   })
 }
 
-/** Compact "Aug 12" style date for inline use in list rows. */
+/** Compact "Aug 12" style date for inline use in list rows. Handles both
+ * full ISO timestamps (watched_at, rated_at, etc. -- a real instant, safe
+ * to hand straight to `new Date`) and TMDB's date-only "YYYY-MM-DD" strings
+ * (air_date -- needs the same local-calendar-day parsing as isFutureDate
+ * above, or it silently rolls back a day for anyone west of UTC: an episode
+ * airing "2026-08-18" would print as "Aug 17"). */
 export function formatShortDate(iso: string): string {
-  return new Date(iso).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
+  const dateOnly = /^\d{4}-\d{2}-\d{2}$/.test(iso)
+  const date = dateOnly
+    ? (() => {
+        const [y, m, d] = iso.split('-').map(Number)
+        return new Date(y, m - 1, d)
+      })()
+    : new Date(iso)
+  return date.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
 }
 
 /** Today's date as a local YYYY-MM-DD string, for pre-filling/limiting a
