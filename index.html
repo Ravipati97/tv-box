@@ -23,6 +23,22 @@
       })()
     </script>
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <!-- iOS's "Add to Home Screen" ignores the SVG favicon above (Safari
+         needs a raster apple-touch-icon) -- without this it falls back to a
+         screenshot of the page as the home screen icon instead of the
+         actual logo. 180x180 covers current devices; the smaller sizes are
+         for older iPads/iPhones that still ask for them explicitly. -->
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+    <link rel="apple-touch-icon" sizes="152x152" href="/apple-touch-icon-152x152.png" />
+    <link rel="apple-touch-icon" sizes="167x167" href="/apple-touch-icon-167x167.png" />
+    <link rel="apple-touch-icon" sizes="120x120" href="/apple-touch-icon-120x120.png" />
+    <link rel="manifest" href="/manifest.json" />
+    <!-- Opens full-screen from the home screen (no Safari chrome) and uses
+         this title under the icon instead of falling back to the page's
+         <title>. -->
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="TV Box" />
     <meta
       name="viewport"
       content="width=device-width, initial-scale=1.0, viewport-fit=cover, interactive-widget=resizes-content"
