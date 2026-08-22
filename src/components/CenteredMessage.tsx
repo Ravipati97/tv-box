@@ -8,7 +8,7 @@ import { Link } from 'react-router-dom'
 export default function CenteredMessage({
   message,
   backTo = '/members',
-  backLabel = 'Back to members',
+  backLabel = 'Back to people',
 }: {
   message: string
   backTo?: string

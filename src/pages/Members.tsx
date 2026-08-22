@@ -3,20 +3,39 @@ import { Link } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import { useAuth } from '../contexts/AuthContext'
 import { fetchAllUsers } from '../lib/users'
+import { fetchFollowerIds, fetchFollowingIds, followUser, unfollowUser } from '../lib/follows'
+import FollowButton from '../components/FollowButton'
 import type { AppUser } from '../types'
 
+/** The old flat Members directory, now with a real follow graph: every row
+ * gets a Follow/Following button and a "Follows you" badge instead of just
+ * being a static list. Search stays exactly as it was -- discovery still
+ * matters at this app's size, just with follow state layered on top. */
 export default function Members() {
   const { user: me } = useAuth()
   const [users, setUsers] = useState<AppUser[]>([])
+  const [followingIds, setFollowingIds] = useState<Set<string>>(new Set())
+  const [followerIds, setFollowerIds] = useState<Set<string>>(new Set())
+  const [savingId, setSavingId] = useState<string | null>(null)
   const [query, setQuery] = useState('')
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
     let cancelled = false
-    fetchAllUsers()
-      .then((data) => {
-        if (!cancelled) setUsers(data)
+    setLoading(true)
+    setError(null)
+    Promise.all([
+      fetchAllUsers(),
+      me ? fetchFollowingIds(me.id) : Promise.resolve(new Set<string>()),
+      me ? fetchFollowerIds(me.id) : Promise.resolve(new Set<string>()),
+    ])
+      .then(([allUsers, following, followers]) => {
+        if (!cancelled) {
+          setUsers(allUsers)
+          setFollowingIds(following)
+          setFollowerIds(followers)
+        }
       })
       .catch((err) => {
         if (!cancelled) setError(err instanceof Error ? err.message : 'Failed to load members.')
@@ -27,13 +46,49 @@ export default function Members() {
     return () => {
       cancelled = true
     }
-  }, [])
+  }, [me])
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase()
     if (!q) return users
     return users.filter((u) => u.username.toLowerCase().includes(q))
   }, [users, query])
+
+  async function handleFollow(targetId: string) {
+    if (!me) return
+    setSavingId(targetId)
+    setFollowingIds((prev) => new Set(prev).add(targetId))
+    try {
+      await followUser(me.id, targetId)
+    } catch {
+      setFollowingIds((prev) => {
+        const next = new Set(prev)
+        next.delete(targetId)
+        return next
+      })
+      setError('Failed to follow. Try again.')
+    } finally {
+      setSavingId(null)
+    }
+  }
+
+  async function handleUnfollow(targetId: string) {
+    if (!me) return
+    setSavingId(targetId)
+    setFollowingIds((prev) => {
+      const next = new Set(prev)
+      next.delete(targetId)
+      return next
+    })
+    try {
+      await unfollowUser(me.id, targetId)
+    } catch {
+      setFollowingIds((prev) => new Set(prev).add(targetId))
+      setError('Failed to unfollow. Try again.')
+    } finally {
+      setSavingId(null)
+    }
+  }
 
   return (
     <div className="mx-auto max-w-3xl px-4 pb-24 pt-6 sm:px-6 md:pb-10">
@@ -42,7 +97,7 @@ export default function Members() {
         animate={{ opacity: 1, y: 0 }}
         className="font-display mb-5 text-2xl font-semibold text-base-100"
       >
-        Members
+        People
       </motion.h1>
 
       <div className="relative mb-6">
@@ -78,7 +133,7 @@ export default function Members() {
         </div>
       ) : filtered.length === 0 ? (
         <p className="mt-10 text-center text-sm text-base-500">
-          {users.length === 0 ? 'No one has registered yet.' : `No members match “${query}”.`}
+          {users.length === 0 ? 'No one has registered yet.' : `No one matches “${query}”.`}
         </p>
       ) : (
         <ul className="space-y-2">
@@ -88,11 +143,9 @@ export default function Members() {
               initial={{ opacity: 0, y: 6 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.25, delay: Math.min(i, 10) * 0.02 }}
+              className="flex items-center gap-3 rounded-xl border border-hairline bg-base-850/60 p-3 transition-colors duration-200 hover:bg-base-800/70"
             >
-              <Link
-                to={`/u/${u.username}`}
-                className="flex items-center gap-3 rounded-xl border border-hairline bg-base-850/60 p-3 transition-colors duration-200 hover:bg-base-800/70"
-              >
+              <Link to={`/u/${u.username}`} className="flex min-w-0 flex-1 items-center gap-3">
                 <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-accent-500/15 text-sm font-semibold text-accent-300 ring-1 ring-accent-500/20">
                   {u.username.slice(0, 2).toUpperCase()}
                 </div>
@@ -106,13 +159,23 @@ export default function Members() {
                     )}
                   </p>
                   <p className="text-xs text-base-500">
-                    Joined {new Date(u.created_at).toLocaleDateString(undefined, {
+                    {me?.id !== u.id && followerIds.has(u.id) ? 'Follows you · ' : ''}
+                    Joined{' '}
+                    {new Date(u.created_at).toLocaleDateString(undefined, {
                       month: 'short',
                       year: 'numeric',
                     })}
                   </p>
                 </div>
               </Link>
+              {me && me.id !== u.id && (
+                <FollowButton
+                  isFollowing={followingIds.has(u.id)}
+                  saving={savingId === u.id}
+                  onFollow={() => handleFollow(u.id)}
+                  onUnfollow={() => handleUnfollow(u.id)}
+                />
+              )}
             </motion.li>
           ))}
         </ul>

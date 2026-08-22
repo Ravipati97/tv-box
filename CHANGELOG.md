@@ -6,6 +6,19 @@ All notable changes to TV Box are documented here. Format loosely follows
 
 ## [Unreleased]
 
+## [1.1.0] - 2026-08-22
+
+### Added
+
+- Followers/following, replacing the old flat member directory: a Follow
+  button everywhere someone's profile shows up, follower/following counts
+  and lists on every profile, and a "Follows you" badge.
+- Activity now defaults to a Following feed (with a one-tap switch back to
+  Everyone), and includes "X started following Y" alongside the usual
+  rated/finished events.
+- In-app notifications for new followers, with an unread count on a new
+  bell icon in the top bar.
+
 ## [1.0.0] - 2026-08-22
 
 First version-tracked release. TV Box has been in daily use by the group
@@ -40,5 +53,6 @@ date pickers, mobile layout/keyboard/scroll bugs, error handling and
 optimistic-UI rollback, reduced-motion support, and accessibility
 (focus/escape handling, touch targets).
 
-[Unreleased]: https://github.com/thetvbox/thetvbox.github.io/compare/v1.0.0...HEAD
+[Unreleased]: https://github.com/thetvbox/thetvbox.github.io/compare/v1.1.0...HEAD
+[1.1.0]: https://github.com/thetvbox/thetvbox.github.io/compare/v1.0.0...v1.1.0
 [1.0.0]: https://github.com/thetvbox/thetvbox.github.io/releases/tag/v1.0.0

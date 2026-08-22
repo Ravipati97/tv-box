@@ -4,6 +4,7 @@ import { useTheme } from '../contexts/ThemeContext'
 import { scrollBehavior } from '../lib/motion'
 import AppLogo from './AppLogo'
 import ReportBugButton from './ReportBugButton'
+import NotificationsBell from './NotificationsBell'
 
 const linkBase =
   'relative flex flex-col items-center justify-center gap-0.5 text-[11px] font-medium transition-colors duration-200 md:flex-row md:gap-1.5 md:text-sm md:px-3.5 md:py-1.5 md:rounded-full'
@@ -148,7 +149,7 @@ const NAV_ITEMS = [
   { to: '/home', label: 'Home', Icon: HomeIcon },
   { to: '/activity', label: 'Activity', Icon: ActivityIcon },
   { to: '/search', label: 'Search', Icon: SearchIcon },
-  { to: '/members', label: 'Members', Icon: PeopleIcon },
+  { to: '/members', label: 'People', Icon: PeopleIcon },
   { to: '/profile', label: 'Profile', Icon: UserIcon },
 ] as const
 
@@ -212,13 +213,13 @@ export default function Navbar() {
               ))}
             </nav>
             <ThemeToggle />
-            {/* Last in this row on purpose: ReportBugPanel anchors itself
-                with right-0 off its own trigger, so the trigger needs to be
-                the actual rightmost element in the header for that math to
-                land inside the viewport. With ThemeToggle after it instead,
-                the panel's left edge went negative and got clipped by
-                body's overflow-x: hidden on every phone-width screen. */}
             <ReportBugButton />
+            {/* Last in this row on purpose, same reasoning as ReportBugButton
+                above: NotificationsPanel also anchors itself with right-0 off
+                its own trigger, so whichever of these two is actually last
+                needs to be the header's rightmost element for that math to
+                land inside the viewport instead of clipping on phone widths. */}
+            <NotificationsBell />
           </div>
         </div>
       </header>

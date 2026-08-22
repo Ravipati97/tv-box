@@ -3,6 +3,7 @@ import { Link, useParams } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
 import { fetchUserByUsername } from '../lib/users'
 import ProfileActivity from '../components/ProfileActivity'
+import ProfileFollowSection from '../components/ProfileFollowSection'
 import CenteredMessage from '../components/CenteredMessage'
 import type { AppUser } from '../types'
 
@@ -23,7 +24,7 @@ export default function PublicProfile() {
         if (!cancelled) setProfile(found)
       })
       .catch((err) => {
-        if (!cancelled) setError(err instanceof Error ? err.message : 'Failed to load this member.')
+        if (!cancelled) setError(err instanceof Error ? err.message : 'Failed to load this profile.')
       })
 
     return () => {
@@ -32,7 +33,7 @@ export default function PublicProfile() {
   }, [username])
 
   if (error || profile === null) {
-    return <CenteredMessage message={error ?? `No member found with username “${username}”.`} />
+    return <CenteredMessage message={error ?? `No one found with username “${username}”.`} />
   }
 
   const isMe = me?.username === username
@@ -55,6 +56,7 @@ export default function PublicProfile() {
                 @{profile.username}
               </h1>
             )}
+            {profile && <ProfileFollowSection profileId={profile.id} isMe={isMe} />}
           </div>
         </div>
         {isMe ? (

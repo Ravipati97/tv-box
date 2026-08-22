@@ -2,6 +2,7 @@ import { dayKey } from './date'
 import type {
   EpisodeWatched,
   EpisodeWatchedWithUser,
+  Follow,
   SeasonRatingWithUser,
   ShowRating,
   ShowRatingWithUser,
@@ -366,6 +367,10 @@ export function buildUndatedDiaryEntries(watched: EpisodeWatched[]): DiaryEntry[
 // --- Group activity feed (every member's ratings/finishes, merged) ---
 
 export interface GroupActivityEvent {
+  /** Discriminates this from FollowActivityEvent in a merged feed (see
+   * mergeActivityFeed below) -- lets Activity.tsx pick the right row
+   * component without a shape check. */
+  kind: 'show'
   /** userId + showId is unique -- one "entry" per person per show, same as History. */
   key: string
   userId: string
@@ -429,6 +434,7 @@ export function buildGroupActivity(
       const at = s.finishedAt ?? s.ratedAt
       if (!at) continue
       events.push({
+        kind: 'show',
         key: `${userId}-${s.showId}`,
         userId,
         username: bucket.username,
@@ -449,6 +455,7 @@ export function buildGroupActivity(
   // shows up here regardless of the show's overall progress/rating state.
   for (const sr of seasonRatings) {
     events.push({
+      kind: 'show',
       key: `${sr.user_id}-${sr.show_id}-season-${sr.season_number}`,
       userId: sr.user_id,
       username: sr.users?.username ?? 'unknown',
@@ -466,4 +473,59 @@ export function buildGroupActivity(
 
   events.sort((a, b) => b.at.localeCompare(a.at))
   return events
+}
+
+// --- Group activity feed, follow events (who-followed-whom) ---
+
+export interface FollowActivityEvent {
+  kind: 'follow'
+  /** One entry per follow edge -- an unfollow just removes it from the next
+   * fetch, same as everything else here (nothing is soft-deleted). */
+  key: string
+  followerId: string
+  followerUsername: string
+  followedId: string
+  followedUsername: string
+  at: string
+  /** Always false -- a follow's created_at is always a real timestamp,
+   * never a placeholder. Present purely so FollowActivityEvent and
+   * GroupActivityEvent can share the same day-grouping code in Activity.tsx. */
+  atUnknown: false
+}
+
+/** Turns raw follow edges into feed-ready events, resolving both sides'
+ * usernames against a shared lookup (the same `members` list Activity.tsx
+ * already fetches for its person-filter chips). An edge whose follower or
+ * followed id isn't in the lookup is skipped rather than rendered with a
+ * fabricated "unknown" username -- shouldn't happen since both ids always
+ * reference a real users row, but a stale/deleted account shouldn't produce
+ * a broken-looking row. */
+export function buildFollowActivity(follows: Follow[], usernameById: Map<string, string>): FollowActivityEvent[] {
+  const events: FollowActivityEvent[] = []
+  for (const f of follows) {
+    const followerUsername = usernameById.get(f.follower_id)
+    const followedUsername = usernameById.get(f.followed_id)
+    if (!followerUsername || !followedUsername) continue
+    events.push({
+      kind: 'follow',
+      key: `follow-${f.id}`,
+      followerId: f.follower_id,
+      followerUsername,
+      followedId: f.followed_id,
+      followedUsername,
+      at: f.created_at,
+      atUnknown: false,
+    })
+  }
+  return events
+}
+
+export type ActivityFeedItem = GroupActivityEvent | FollowActivityEvent
+
+/** Merges show events and follow events into one reverse-chronological feed. */
+export function mergeActivityFeed(
+  showEvents: GroupActivityEvent[],
+  followEvents: FollowActivityEvent[],
+): ActivityFeedItem[] {
+  return [...showEvents, ...followEvents].sort((a, b) => b.at.localeCompare(a.at))
 }

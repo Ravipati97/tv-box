@@ -29,6 +29,13 @@ create policy "Anyone can register a user"
   on public.users for insert
   with check (true);
 
+-- When this person last opened their notifications -- powers the unread
+-- "new follower" count/dot (see lib/follows.ts fetchNewFollowerCount).
+-- Defaults to now() so a freshly-registered user doesn't retroactively see
+-- every pre-existing follow as "new".
+alter table public.users
+  add column if not exists notifications_seen_at timestamptz not null default now();
+
 create table if not exists public.episode_ratings (
   id uuid primary key default gen_random_uuid(),
   user_id uuid not null references public.users(id) on delete cascade,
@@ -505,4 +512,41 @@ create policy "Anyone can insert list items"
 drop policy if exists "Anyone can delete list items" on public.show_list_items;
 create policy "Anyone can delete list items"
   on public.show_list_items for delete
+  using (true);
+
+-- Replaces the old flat "Members" directory with a real social graph.
+-- follower_id follows followed_id -- e.g. "Activity, scoped to Following"
+-- reads as show_id activity where the actor is in
+-- (select followed_id from follows where follower_id = me). No update
+-- policy: a follow relationship either exists or it doesn't, there's nothing
+-- on a row to edit -- unfollow is a delete, re-following is a fresh insert.
+create table if not exists public.follows (
+  id uuid primary key default gen_random_uuid(),
+  follower_id uuid not null references public.users(id) on delete cascade,
+  followed_id uuid not null references public.users(id) on delete cascade,
+
+  created_at timestamptz not null default now(),
+
+  unique (follower_id, followed_id),
+  check (follower_id != followed_id)
+);
+
+create index if not exists follows_follower_id_idx on public.follows (follower_id);
+create index if not exists follows_followed_id_idx on public.follows (followed_id, created_at desc);
+
+alter table public.follows enable row level security;
+
+drop policy if exists "Anyone can read follows" on public.follows;
+create policy "Anyone can read follows"
+  on public.follows for select
+  using (true);
+
+drop policy if exists "Anyone can insert follows" on public.follows;
+create policy "Anyone can insert follows"
+  on public.follows for insert
+  with check (true);
+
+drop policy if exists "Anyone can delete follows" on public.follows;
+create policy "Anyone can delete follows"
+  on public.follows for delete
   using (true);

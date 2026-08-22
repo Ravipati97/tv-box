@@ -113,6 +113,20 @@ export interface AppUser {
   email: string
   username: string
   created_at: string
+  /** Last time this person opened their notifications -- powers the unread
+   * new-follower count. Not present on rows fetched before this column
+   * existed... except there's no such thing here, it's backfilled to now()
+   * for everyone at migration time. See lib/follows.ts. */
+  notifications_seen_at: string
+}
+
+/** One "follower_id follows followed_id" edge. Replaces the old flat
+ * Members directory with a real social graph -- see lib/follows.ts. */
+export interface Follow {
+  id: string
+  follower_id: string
+  followed_id: string
+  created_at: string
 }
 
 /** One person's single rating for an entire show (replaces per-episode rating). */

@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
 import ProfileActivity from '../components/ProfileActivity'
+import ProfileFollowSection from '../components/ProfileFollowSection'
 import ChangelogPanel from '../components/ChangelogPanel'
 import { appVersion } from '../lib/changelog'
 
@@ -22,6 +23,7 @@ export default function Profile() {
               @{user?.username}
             </h1>
             <p className="text-xs text-base-500">{user?.email}</p>
+            {user && <ProfileFollowSection profileId={user.id} isMe />}
           </div>
         </div>
         <div className="flex items-center gap-2">
