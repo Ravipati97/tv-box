@@ -13,6 +13,7 @@ import { posterUrl } from '../lib/tmdb'
 import { dayKey, formatDiaryHeading, formatShortDate } from '../lib/date'
 import { useAuth } from '../contexts/AuthContext'
 import HistorySection from './HistorySection'
+import RatingDistribution from './RatingDistribution'
 import Toast from './Toast'
 import { useToast } from '../hooks/useToast'
 import { useEscapeAndFocusReturn } from '../hooks/useEscapeAndFocusReturn'
@@ -164,6 +165,8 @@ export default function ProfileActivity({ userId, username }: ProfileActivityPro
         <StatCard label="Hours watched" value={stats.hoursWatched} />
         <StatCard label="Avg rating" value={stats.avg !== null ? stats.avg.toFixed(1) : '—'} />
       </div>
+
+      <RatingDistribution ratings={ratings} />
 
       <div className="mb-4 flex items-center gap-1">
         <TabButton active={tab === 'diary'} onClick={() => setTab('diary')}>
