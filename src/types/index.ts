@@ -28,6 +28,13 @@ export interface TmdbShowDetail {
   number_of_seasons: number
   number_of_episodes: number
   status: string
+  /** ISO 3166-1 country codes (e.g. "US", "KR") -- powers the History
+   * filters' Country facet. Always present in TMDB's response; just wasn't
+   * typed/used here until that filter needed it. */
+  origin_country: string[]
+  /** ISO 639-1 language code (e.g. "en", "ko") -- powers the History
+   * filters' Language facet. Same as origin_country above. */
+  original_language: string
   seasons: TmdbSeasonSummary[]
   /** Fetched via append_to_response=external_ids -- used to cross-reference
    * this show on TVmaze for a corrected air date, see lib/tvmaze.ts. */

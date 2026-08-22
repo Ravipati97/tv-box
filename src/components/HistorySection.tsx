@@ -3,9 +3,19 @@ import { Link } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import type { HistorySort, ShowActivity } from '../lib/showActivity'
 import { sortHistory } from '../lib/showActivity'
+import {
+  buildHistoryFilterFacets,
+  countActiveHistoryFilters,
+  emptyHistoryFilters,
+  filterHistory,
+  isHistoryFiltersActive,
+} from '../lib/historyFilters'
+import type { HistoryFilters } from '../lib/historyFilters'
 import { posterUrl, providerLogoUrl } from '../lib/tmdb'
 import type { ResolvedProvider } from '../lib/streamingProvider'
 import { useStreamingPlatforms } from '../hooks/useStreamingPlatforms'
+import { useShowDetails } from '../hooks/useShowDetails'
+import HistoryFiltersPanel from './HistoryFiltersPanel'
 import StreamingBadge from './StreamingBadge'
 import EmptyState from './EmptyState'
 import { formatShortDate } from '../lib/date'
@@ -39,21 +49,37 @@ export default function HistorySection({
   defaultSort = 'recent',
 }: HistorySectionProps) {
   const [sort, setSort] = useState<HistorySort>(defaultSort)
+  const [filtersOpen, setFiltersOpen] = useState(false)
+  const [filters, setFilters] = useState<HistoryFilters>(emptyHistoryFilters)
 
   const showIds = useMemo(() => activity.map((s) => s.showId), [activity])
   // Resolved unconditionally (not just for the "Platform" sort) -- every
   // card gets a streaming badge regardless of how the grid's currently sorted.
   const { platforms, loading: loadingPlatforms } = useStreamingPlatforms(showIds)
+  // Genre/year/country/language/status all come from TMDB show details,
+  // which nothing else on this list needs -- only fetched once someone
+  // actually opens Filters (or already has one active), not on every visit.
+  const detailsEnabled = filtersOpen || isHistoryFiltersActive(filters)
+  const { details, loading: loadingDetails } = useShowDetails(showIds, detailsEnabled)
+
+  const facets = useMemo(
+    () => buildHistoryFilterFacets(activity, details, platforms),
+    [activity, details, platforms],
+  )
+  const filteredActivity = useMemo(
+    () => filterHistory(activity, filters, details, platforms),
+    [activity, filters, details, platforms],
+  )
 
   const flatSorted = useMemo(
-    () => (sort === 'platform' ? [] : sortHistory(activity, sort)),
-    [activity, sort],
+    () => (sort === 'platform' ? [] : sortHistory(filteredActivity, sort)),
+    [filteredActivity, sort],
   )
 
   const groupedByPlatform = useMemo(() => {
     if (sort !== 'platform') return null
     const groups = new Map<string, { provider: ResolvedProvider | null; shows: ShowActivity[] }>()
-    for (const s of activity) {
+    for (const s of filteredActivity) {
       const provider = platforms.get(s.showId) ?? null
       const key = provider ? provider.provider_name : NOT_STREAMING_LABEL
       let group = groups.get(key)
@@ -70,7 +96,7 @@ export default function HistorySection({
         if (b.name === NOT_STREAMING_LABEL) return -1
         return a.name.localeCompare(b.name)
       })
-  }, [sort, platforms, activity])
+  }, [sort, platforms, filteredActivity])
 
   if (activity.length === 0) {
     return (
@@ -80,26 +106,62 @@ export default function HistorySection({
     )
   }
 
+  const activeFilterCount = countActiveHistoryFilters(filters)
+
   return (
     <div>
-      <div className="mb-4 flex flex-wrap items-center gap-1.5">
-        {(Object.keys(SORT_LABELS) as HistorySort[]).map((key) => (
-          <button
-            key={key}
-            type="button"
-            onClick={() => setSort(key)}
-            className={`rounded-full px-2.5 py-1 text-xs font-medium transition-colors duration-200 ${
-              sort === key
-                ? 'bg-accent-500/15 text-accent-300 ring-1 ring-accent-500/40'
-                : 'text-base-500 hover:bg-hover hover:text-base-200'
-            }`}
-          >
-            {SORT_LABELS[key]}
-          </button>
-        ))}
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
+        <div className="flex flex-wrap items-center gap-1.5">
+          {(Object.keys(SORT_LABELS) as HistorySort[]).map((key) => (
+            <button
+              key={key}
+              type="button"
+              onClick={() => setSort(key)}
+              className={`rounded-full px-2.5 py-1 text-xs font-medium transition-colors duration-200 ${
+                sort === key
+                  ? 'bg-accent-500/15 text-accent-300 ring-1 ring-accent-500/40'
+                  : 'text-base-500 hover:bg-hover hover:text-base-200'
+              }`}
+            >
+              {SORT_LABELS[key]}
+            </button>
+          ))}
+        </div>
+        <button
+          type="button"
+          onClick={() => setFiltersOpen((v) => !v)}
+          className={`shrink-0 rounded-full px-2.5 py-1 text-xs font-medium transition-colors duration-200 ${
+            filtersOpen || activeFilterCount > 0
+              ? 'bg-accent-500/15 text-accent-300 ring-1 ring-accent-500/40'
+              : 'text-base-500 hover:bg-hover hover:text-base-200'
+          }`}
+        >
+          Filters{activeFilterCount > 0 ? ` · ${activeFilterCount}` : ''}
+        </button>
       </div>
 
-      {sort === 'platform' ? (
+      {filtersOpen && (
+        <HistoryFiltersPanel
+          facets={facets}
+          filters={filters}
+          onChange={setFilters}
+          loadingDetails={loadingDetails}
+          onClose={() => setFiltersOpen(false)}
+        />
+      )}
+
+      {filteredActivity.length === 0 ? (
+        <EmptyState icon="🔍" className="mt-4">
+          <p className="max-w-xs text-sm text-base-500">No shows match these filters.</p>
+          <button
+            type="button"
+            onClick={() => setFilters(emptyHistoryFilters())}
+            className="mt-3 text-xs text-accent-400 hover:underline"
+          >
+            Clear filters
+          </button>
+        </EmptyState>
+      ) : sort === 'platform' ? (
         loadingPlatforms && platforms.size === 0 ? (
           <div className="grid grid-cols-2 gap-x-4 gap-y-6 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
             {Array.from({ length: 5 }).map((_, i) => (
