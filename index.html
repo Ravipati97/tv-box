@@ -17,18 +17,13 @@
                 ? 'light'
                 : 'dark'
           document.documentElement.classList.add(theme)
-          // iOS reads whatever this link's href is at the moment someone
-          // taps "Add to Home Screen" -- Safari doesn't yet act on the
-          // media="(prefers-color-scheme: ...)" variants declared below on
-          // its own (as of iOS 26), so this sets the right one manually
-          // using the same resolved theme as the page itself. Note this
-          // only affects icons added *after* this shipped -- iOS caches the
-          // icon at add-time and won't swap it if the system theme changes
-          // later; removing and re-adding the shortcut picks up the change.
-          if (theme === 'light') {
-            var icon = document.getElementById('apple-touch-icon')
-            if (icon) icon.setAttribute('href', '/apple-touch-icon-light.png')
-          }
+          // The apple-touch-icon href (light/dark) is kept in sync by
+          // ThemeContext instead of here -- unlike this class, which must be
+          // set before first paint to avoid a visible flash, nothing reads
+          // that href until someone actually taps "Add to Home Screen," so
+          // there's no flash to avoid, and doing it in ThemeContext means it
+          // stays correct if the theme is toggled mid-session too (a
+          // one-time swap here wouldn't have re-run on that).
         } catch (e) {
           document.documentElement.classList.add('dark')
         }
@@ -40,9 +35,9 @@
          screenshot of the page as the home screen icon instead of the
          actual logo. 180x180 covers current devices; the smaller sizes are
          for older iPads/iPhones that still ask for them explicitly. The
-         id="apple-touch-icon" one is the one the boot script above swaps
-         between light/dark; the media-queried pair below is the
-         spec-correct declaration for browsers that do honor it. -->
+         id="apple-touch-icon" one is the one ThemeContext swaps between
+         light/dark as the theme changes; the media-queried pair below is
+         the spec-correct declaration for browsers that do honor it. -->
     <link rel="apple-touch-icon" href="/apple-touch-icon.png" id="apple-touch-icon" />
     <link rel="apple-touch-icon" href="/apple-touch-icon.png" media="(prefers-color-scheme: dark)" />
     <link rel="apple-touch-icon" href="/apple-touch-icon-light.png" media="(prefers-color-scheme: light)" />
@@ -54,6 +49,7 @@
          this title under the icon instead of falling back to the page's
          <title>. -->
     <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <meta name="apple-mobile-web-app-title" content="TV Box" />
     <meta
