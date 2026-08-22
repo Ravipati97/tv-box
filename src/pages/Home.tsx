@@ -210,6 +210,7 @@ export default function Home() {
             const isMultiSeason = Boolean(progress && progress.segments.length > 1)
             const watchedNum = isMultiSeason ? progress!.currentSeasonWatched : s.watchedCount
             const totalNum = isMultiSeason ? progress!.currentSeasonTotal : s.totalEpisodes
+            const nextEpisode = nextEpisodes.get(s.showId)
             return (
               <motion.div
                 key={s.showId}
@@ -243,9 +244,9 @@ export default function Home() {
                       ? ` · ${s.lastWatchedAtUnknown ? 'a while ago' : formatShortDate(s.lastWatchedAt)}`
                       : ''}
                   </p>
-                  {nextEpisodes.get(s.showId) && (
+                  {nextEpisode && (
                     <p className="text-[11px] text-accent-400">
-                      New episode {formatShortDate(nextEpisodes.get(s.showId)!.airDate)}
+                      New episode {formatShortDate(nextEpisode.airDate)}
                     </p>
                   )}
                   <div className="mt-1.5">
@@ -327,7 +328,6 @@ export default function Home() {
           </div>
         </div>
       )}
-
     </div>
   )
 }
