@@ -33,7 +33,14 @@ export default function RewatchLogControl({
     return (
       <button
         type="button"
-        onClick={() => setOpen(true)}
+        onClick={() => {
+          // Reset to today on each open -- this control stays mounted
+          // (just toggled) across repeat opens in the same session, so
+          // without this, opening it a second time would silently keep
+          // whatever date was left over from the last rewatch logged.
+          setDate(todayLocalDateInput())
+          setOpen(true)
+        }}
         className="text-xs text-accent-400 hover:underline"
       >
         {count > 0 ? `Log another rewatch (${count} so far)` : 'Log a rewatch'}
@@ -45,6 +52,7 @@ export default function RewatchLogControl({
     <div className="flex flex-wrap items-center gap-1.5">
       <input
         type="date"
+        aria-label="Rewatch date"
         value={date}
         max={today}
         onChange={(e) => setDate(e.target.value)}

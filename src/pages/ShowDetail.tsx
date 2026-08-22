@@ -42,7 +42,7 @@ import { invalidatePlatformCache, pickBestFreeProvider } from '../lib/streamingP
 import { addToWatchlist, fetchWatchlistItem, removeFromWatchlist } from '../lib/watchlist'
 import { fetchStartedItem, startShow } from '../lib/showStarted'
 import { dismissShow, fetchDismissedItem, undismissShow } from '../lib/showDismissed'
-import { deleteRewatch, fetchRewatchesForShow, logRewatch, restoreRewatch } from '../lib/rewatches'
+import { deleteRewatch, fetchRewatchesForShow, logRewatch, restoreRewatch, sortRewatchesDesc } from '../lib/rewatches'
 import { fetchListMembershipForShow } from '../lib/lists'
 import { computeSeasonProgress } from '../lib/seasonProgress'
 import { getCorrectedAirDates, tvmazeEpisodeKey } from '../lib/tvmaze'
@@ -712,7 +712,10 @@ export default function ShowDetail() {
         showPosterPath: show.poster_path,
         rewatchedAt,
       })
-      setRewatches((prev) => [saved, ...prev])
+      // sortRewatchesDesc, not a plain prepend -- rewatchedAt can now be
+      // backdated (see RewatchLogControl), so a new entry isn't guaranteed
+      // to be the newest one in the list.
+      setRewatches((prev) => sortRewatchesDesc([saved, ...prev]))
     } catch {
       showError('Failed to log this rewatch. Try again.')
     }
@@ -724,7 +727,7 @@ export default function ShowDetail() {
     try {
       await deleteRewatch(id)
     } catch {
-      if (removed) setRewatches((prev) => [removed, ...prev])
+      if (removed) setRewatches((prev) => sortRewatchesDesc([removed, ...prev]))
       showError('Failed to remove this rewatch. Try again.')
       return
     }
@@ -734,7 +737,9 @@ export default function ShowDetail() {
       showUndo('Rewatch removed', async () => {
         try {
           const restored = await restoreRewatch(removed)
-          setRewatches((prev) => [restored, ...prev])
+          // Same reasoning as the insert above -- a deleted entry can be
+          // from anywhere in the list, not just the front.
+          setRewatches((prev) => sortRewatchesDesc([restored, ...prev]))
         } catch {
           showError('Failed to undo. Try logging the rewatch again.')
         }

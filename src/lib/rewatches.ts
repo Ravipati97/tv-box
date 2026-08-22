@@ -1,6 +1,17 @@
 import { supabase } from './supabase'
 import type { ShowRewatch } from '../types'
 
+/** Keeps a rewatch list in newest-first order. Needed anywhere a row is
+ * inserted back into local state outside of a fresh fetch (logging one,
+ * undoing a delete, rolling back a failed delete) -- those all used to just
+ * prepend, which only happened to look right when every rewatch was logged
+ * as "now" (see logRewatch below). Now that rewatchedAt can be backdated,
+ * and since undo/rollback can reinsert a row from anywhere in the list, a
+ * plain prepend can land it in the wrong position. */
+export function sortRewatchesDesc(rows: ShowRewatch[]): ShowRewatch[] {
+  return [...rows].sort((a, b) => b.rewatched_at.localeCompare(a.rewatched_at))
+}
+
 export async function fetchRewatchesForShow(userId: string, showId: number): Promise<ShowRewatch[]> {
   const { data, error } = await supabase
     .from('show_rewatches')
