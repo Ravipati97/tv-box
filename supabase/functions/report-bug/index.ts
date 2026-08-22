@@ -50,9 +50,23 @@ Deno.serve(async (req) => {
   } catch {
     return jsonResponse({ error: 'Invalid JSON body' }, 400)
   }
+  // req.json() succeeds for any valid JSON value, not just objects (e.g.
+  // "null", "42", "[]") -- without this, payload.title below would throw on
+  // a null body and surface as an opaque 500 instead of this 400.
+  if (!payload || typeof payload !== 'object') {
+    return jsonResponse({ error: 'Invalid JSON body' }, 400)
+  }
 
-  const title = payload.title?.trim().slice(0, MAX_TITLE_LENGTH)
-  const description = payload.description?.trim().slice(0, MAX_DESCRIPTION_LENGTH)
+  // The app's own form always sends strings, but this endpoint is reachable
+  // by anyone with the (intentionally public, see comment above) anon key --
+  // a hand-crafted request with e.g. title: 123 would otherwise throw on
+  // .trim() and surface as an opaque 500 instead of this 400.
+  if (typeof payload.title !== 'string' || typeof payload.description !== 'string') {
+    return jsonResponse({ error: 'title and description are required' }, 400)
+  }
+
+  const title = payload.title.trim().slice(0, MAX_TITLE_LENGTH)
+  const description = payload.description.trim().slice(0, MAX_DESCRIPTION_LENGTH)
   if (!title || !description) {
     return jsonResponse({ error: 'title and description are required' }, 400)
   }

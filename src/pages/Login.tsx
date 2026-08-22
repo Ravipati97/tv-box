@@ -1,31 +1,13 @@
-import { useEffect, useRef, useState } from 'react'
+import { useState } from 'react'
 import type { FormEvent } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
 import { Navigate } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
 import { isSupabaseConfigured } from '../lib/supabase'
 import AppLogo from '../components/AppLogo'
+import { useDesktopAutoFocus } from '../hooks/useDesktopAutoFocus'
 
 type Step = 'email' | 'username'
-
-/**
- * Focuses the input on mount, but only on devices with a precise pointer
- * (i.e. desktop with a mouse). Auto-focusing on touch devices pops the
- * on-screen keyboard immediately on page load, which on mobile browsers can
- * cause the layout to shift/zoom unexpectedly before the user has done
- * anything -- so we skip it there and let people tap in themselves.
- */
-function useDesktopAutoFocus(active: boolean) {
-  const ref = useRef<HTMLInputElement>(null)
-  useEffect(() => {
-    if (!active) return
-    if (typeof window === 'undefined' || !window.matchMedia) return
-    if (window.matchMedia('(pointer: fine)').matches) {
-      ref.current?.focus()
-    }
-  }, [active])
-  return ref
-}
 
 export default function Login() {
   const { user, findByEmail, register, signIn } = useAuth()

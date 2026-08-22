@@ -211,8 +211,14 @@ export default function Navbar() {
                 </NavLink>
               ))}
             </nav>
-            <ReportBugButton />
             <ThemeToggle />
+            {/* Last in this row on purpose: ReportBugPanel anchors itself
+                with right-0 off its own trigger, so the trigger needs to be
+                the actual rightmost element in the header for that math to
+                land inside the viewport. With ThemeToggle after it instead,
+                the panel's left edge went negative and got clipped by
+                body's overflow-x: hidden on every phone-width screen. */}
+            <ReportBugButton />
           </div>
         </div>
       </header>

@@ -5,6 +5,7 @@ import { useAuth } from '../contexts/AuthContext'
 import { submitBugReport } from '../lib/bugReport'
 import { appVersion } from '../lib/changelog'
 import { useEscapeAndFocusReturn } from '../hooks/useEscapeAndFocusReturn'
+import { useDesktopAutoFocus } from '../hooks/useDesktopAutoFocus'
 
 /** Small persistent trigger in the top bar (every page, not tied to any one
  * section) -- opens a dropdown-style panel instead of a true modal, same as
@@ -57,11 +58,20 @@ function ReportBugPanel({ onClose }: { onClose: () => void }) {
   const [status, setStatus] = useState<Status>('idle')
   const [error, setError] = useState<string | null>(null)
   const [result, setResult] = useState<{ url: string; number: number } | null>(null)
+  // Desktop-only autofocus -- see the hook. On mobile, autofocusing here
+  // would pop the keyboard the instant the bug icon is tapped, before the
+  // panel has even settled into place.
+  const titleInputRef = useDesktopAutoFocus(true)
 
   useEscapeAndFocusReturn(true, onClose)
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault()
+    // The submit button is disabled while saving, but a native form still
+    // submits on Enter from the title field regardless of that -- without
+    // this guard, pressing Enter again during a slow request re-fires
+    // handleSubmit and files a second, duplicate issue.
+    if (status === 'saving') return
     if (!title.trim() || !description.trim()) return
     setStatus('saving')
     setError(null)
@@ -110,8 +120,9 @@ function ReportBugPanel({ onClose }: { onClose: () => void }) {
             </button>
           </div>
           <input
-            autoFocus
+            ref={titleInputRef}
             type="text"
+            aria-label="Bug title"
             value={title}
             onChange={(e) => setTitle(e.target.value)}
             placeholder="What went wrong, in a few words"
@@ -119,6 +130,7 @@ function ReportBugPanel({ onClose }: { onClose: () => void }) {
             className="rounded-lg border border-hairline-strong bg-base-950 px-2.5 py-1.5 text-xs text-base-200 placeholder:text-base-600"
           />
           <textarea
+            aria-label="Bug description"
             value={description}
             onChange={(e) => setDescription(e.target.value)}
             placeholder="What happened, and what did you expect instead?"
