@@ -59,7 +59,7 @@ export default function ShowDiary() {
   }, [username, showIdNum])
 
   if (profile === null) {
-    return <CenteredMessage message={`No member found with username “${username}”.`} />
+    return <CenteredMessage message={`No one found with username “${username}”.`} />
   }
 
   const isMe = me?.username === username

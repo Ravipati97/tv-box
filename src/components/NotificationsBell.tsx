@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
 import { useEscapeAndFocusReturn } from '../hooks/useEscapeAndFocusReturn'
+import { useCloseOnNavigate } from '../hooks/useCloseOnNavigate'
 import {
   fetchNewFollowerCount,
   fetchRecentFollowerNotifications,
@@ -20,6 +21,10 @@ export default function NotificationsBell() {
   const { user: me } = useAuth()
   const [open, setOpen] = useState(false)
   const [unread, setUnread] = useState(0)
+
+  // Navbar never unmounts across route changes -- without this, tapping a
+  // nav link while this panel is open leaves it floating over the new page.
+  useCloseOnNavigate(() => setOpen(false))
 
   useEffect(() => {
     if (!me) return

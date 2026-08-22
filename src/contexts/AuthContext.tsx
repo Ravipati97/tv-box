@@ -5,6 +5,35 @@ import type { AppUser } from '../types'
 
 const STORAGE_KEY = 'tvbox_user'
 
+// localStorage access itself (not just JSON.parse-ing what's in it) can
+// throw -- Safari private browsing on older iOS, storage-partitioning edge
+// cases, and locked-down/kiosk browser configs all do this. Without these
+// guards, a `localStorage.getItem` throwing here happens synchronously
+// inside an effect during the very first render, before there's any user to
+// show a friendly "logged out" state to -- worth catching explicitly rather
+// than relying on ErrorBoundary to paper over the whole app failing to boot.
+function readStoredUser(): string | null {
+  try {
+    return localStorage.getItem(STORAGE_KEY)
+  } catch {
+    return null
+  }
+}
+function writeStoredUser(value: string): void {
+  try {
+    localStorage.setItem(STORAGE_KEY, value)
+  } catch {
+    // Session still works in-memory for this tab; it just won't survive a reload.
+  }
+}
+function clearStoredUser(): void {
+  try {
+    localStorage.removeItem(STORAGE_KEY)
+  } catch {
+    // Nothing to clean up if storage isn't writable in the first place.
+  }
+}
+
 interface AuthContextValue {
   user: AppUser | null
   loading: boolean
@@ -28,12 +57,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    const stored = localStorage.getItem(STORAGE_KEY)
+    const stored = readStoredUser()
     if (stored) {
       try {
         setUser(JSON.parse(stored) as AppUser)
       } catch {
-        localStorage.removeItem(STORAGE_KEY)
+        clearStoredUser()
       }
     }
     setLoading(false)
@@ -70,16 +99,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           throw error
         }
         const newUser = data as AppUser
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(newUser))
+        writeStoredUser(JSON.stringify(newUser))
         setUser(newUser)
         return newUser
       },
       signIn(nextUser: AppUser) {
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(nextUser))
+        writeStoredUser(JSON.stringify(nextUser))
         setUser(nextUser)
       },
       signOut() {
-        localStorage.removeItem(STORAGE_KEY)
+        clearStoredUser()
         setUser(null)
       },
     }),

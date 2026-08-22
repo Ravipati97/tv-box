@@ -19,6 +19,23 @@ All notable changes to TV Box are documented here. Format loosely follows
 - In-app notifications for new followers, with an unread count on a new
   bell icon in the top bar.
 
+### Fixed
+
+- FollowButton no longer gets stuck showing "Unfollow" styling after a tap
+  on touch devices (was reacting to a synthetic hover event with no
+  matching hover-out).
+- Follower/following counts on your own profile now update immediately
+  when you follow or unfollow someone from the followers/following list,
+  instead of only after a reload.
+- Failed follow/unfollow attempts on a profile page now show an error
+  message instead of failing silently.
+- The bell and bug-report dropdowns in the top bar now close when you
+  navigate to a different page, instead of staying open over whatever
+  loads next.
+- Login no longer hard-crashes if the browser blocks local storage access
+  (e.g. some private-browsing modes) -- it now just falls back to a
+  logged-out state.
+
 ## [1.0.0] - 2026-08-22
 
 First version-tracked release. TV Box has been in daily use by the group

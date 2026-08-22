@@ -14,11 +14,24 @@ const expectedPasscode = import.meta.env.VITE_SITE_PASSCODE?.trim()
 export const isGateConfigured = Boolean(expectedPasscode)
 
 export function hasPassedGate(): boolean {
-  return localStorage.getItem(GATE_STORAGE_KEY) === '1'
+  // Fails closed (treated as "not passed yet") if storage access itself
+  // throws -- Safari private browsing and similar restricted contexts --
+  // same reasoning as AuthContext's readStoredUser: this runs during the
+  // very first render, so an uncaught throw here would take the whole app
+  // down before there's anything on screen to recover from.
+  try {
+    return localStorage.getItem(GATE_STORAGE_KEY) === '1'
+  } catch {
+    return false
+  }
 }
 
 export function markGatePassed(): void {
-  localStorage.setItem(GATE_STORAGE_KEY, '1')
+  try {
+    localStorage.setItem(GATE_STORAGE_KEY, '1')
+  } catch {
+    // Worst case they just see the passcode gate again next visit.
+  }
 }
 
 export function checkPasscode(input: string): boolean {

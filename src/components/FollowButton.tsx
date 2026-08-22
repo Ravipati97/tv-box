@@ -8,6 +8,20 @@ interface FollowButtonProps {
   size?: 'sm' | 'md'
 }
 
+// Checked once at module load, not per-render -- a device's hover capability
+// doesn't change mid-session. Gates the hover-to-"Unfollow" relabel below:
+// touch browsers frequently fire a synthetic mouseenter on tap with no
+// matching mouseleave (nothing "leaves" without a second tap elsewhere), so
+// without this check a tap would leave the button stuck showing "Unfollow"
+// styling right after a successful follow -- the same class of bug
+// useDesktopAutoFocus (src/hooks/useDesktopAutoFocus.ts) exists to avoid for
+// autofocus. `hover: hover` (not just `pointer: fine`) is the more precise
+// check here since it's specifically about whether hover *events* are real.
+const supportsHover =
+  typeof window !== 'undefined' && window.matchMedia
+    ? window.matchMedia('(hover: hover) and (pointer: fine)').matches
+    : false
+
 /** Follow/Unfollow toggle -- controlled by the caller (isFollowing/saving
  * are read from parent state, not fetched here), so a page listing many
  * people (Find People, FollowListPanel) can hold one shared following-set
@@ -31,8 +45,8 @@ export default function FollowButton({
       disabled={saving}
       aria-label={isFollowing ? 'Unfollow' : 'Follow'}
       onClick={() => (isFollowing ? onUnfollow() : onFollow())}
-      onMouseEnter={() => setHovering(true)}
-      onMouseLeave={() => setHovering(false)}
+      onMouseEnter={() => supportsHover && setHovering(true)}
+      onMouseLeave={() => supportsHover && setHovering(false)}
       className={`shrink-0 rounded-full font-medium transition-colors duration-200 disabled:opacity-50 ${sizeClasses} ${
         isFollowing
           ? hovering

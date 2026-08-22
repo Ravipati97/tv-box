@@ -88,7 +88,7 @@ export default function Compare() {
   }, [myRatings, theirRatings])
 
   if (them === null) {
-    return <CenteredMessage message={`No member found with username “${username}”.`} />
+    return <CenteredMessage message={`No one found with username “${username}”.`} />
   }
 
   if (me && username === me.username) {

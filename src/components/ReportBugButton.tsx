@@ -6,12 +6,17 @@ import { submitBugReport } from '../lib/bugReport'
 import { appVersion } from '../lib/changelog'
 import { useEscapeAndFocusReturn } from '../hooks/useEscapeAndFocusReturn'
 import { useDesktopAutoFocus } from '../hooks/useDesktopAutoFocus'
+import { useCloseOnNavigate } from '../hooks/useCloseOnNavigate'
 
 /** Small persistent trigger in the top bar (every page, not tied to any one
  * section) -- opens a dropdown-style panel instead of a true modal, same as
  * everything else in this app (see useEscapeAndFocusReturn). */
 export default function ReportBugButton() {
   const [open, setOpen] = useState(false)
+
+  // Navbar never unmounts across route changes -- without this, tapping a
+  // nav link while this panel is open leaves it floating over the new page.
+  useCloseOnNavigate(() => setOpen(false))
 
   return (
     <div className="relative">

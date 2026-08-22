@@ -18,6 +18,14 @@ interface FollowListPanelProps {
   userId: string
   mode: 'followers' | 'following'
   onClose: () => void
+  /** Called with +1/-1 whenever a follow/unfollow *inside this panel*
+   * succeeds -- lets the caller keep its own "N following" count in sync.
+   * Only meaningful when the panel is showing the viewer's own profile: the
+   * only count that can ever change from actions taken in here is the
+   * viewer's own following count (nobody in this list can ever be the
+   * viewer, since you can't follow yourself), so callers viewing someone
+   * else's list can safely omit this. */
+  onMyFollowingCountChange?: (delta: number) => void
 }
 
 /** Inline followers/following list, opened from the count buttons on
@@ -25,7 +33,7 @@ interface FollowListPanelProps {
  * the *viewer's* relationship to that person, not the profile owner's) plus
  * a "Follows you" badge -- so browsing someone else's followers is also a
  * place to follow people back. */
-export default function FollowListPanel({ userId, mode, onClose }: FollowListPanelProps) {
+export default function FollowListPanel({ userId, mode, onClose, onMyFollowingCountChange }: FollowListPanelProps) {
   const { user: me } = useAuth()
   const [people, setPeople] = useState<AppUser[]>([])
   const [myFollowingIds, setMyFollowingIds] = useState<Set<string>>(new Set())
@@ -68,6 +76,7 @@ export default function FollowListPanel({ userId, mode, onClose }: FollowListPan
     if (!me) return
     setSavingId(targetId)
     setMyFollowingIds((prev) => new Set(prev).add(targetId))
+    onMyFollowingCountChange?.(1)
     try {
       await followUser(me.id, targetId)
     } catch {
@@ -76,6 +85,7 @@ export default function FollowListPanel({ userId, mode, onClose }: FollowListPan
         next.delete(targetId)
         return next
       })
+      onMyFollowingCountChange?.(-1)
       setError('Failed to follow. Try again.')
     } finally {
       setSavingId(null)
@@ -90,10 +100,12 @@ export default function FollowListPanel({ userId, mode, onClose }: FollowListPan
       next.delete(targetId)
       return next
     })
+    onMyFollowingCountChange?.(-1)
     try {
       await unfollowUser(me.id, targetId)
     } catch {
       setMyFollowingIds((prev) => new Set(prev).add(targetId))
+      onMyFollowingCountChange?.(1)
       setError('Failed to unfollow. Try again.')
     } finally {
       setSavingId(null)

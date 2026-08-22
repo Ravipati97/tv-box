@@ -19,6 +19,7 @@ export default function ProfileFollowSection({ profileId, isMe }: ProfileFollowS
   const [isFollowing, setIsFollowing] = useState(false)
   const [saving, setSaving] = useState(false)
   const [panel, setPanel] = useState<'followers' | 'following' | null>(null)
+  const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
     let cancelled = false
@@ -44,6 +45,7 @@ export default function ProfileFollowSection({ profileId, isMe }: ProfileFollowS
   async function handleFollow() {
     if (!me) return
     setSaving(true)
+    setError(null)
     setIsFollowing(true)
     setCounts((c) => ({ ...c, followers: c.followers + 1 }))
     try {
@@ -51,6 +53,7 @@ export default function ProfileFollowSection({ profileId, isMe }: ProfileFollowS
     } catch {
       setIsFollowing(false)
       setCounts((c) => ({ ...c, followers: Math.max(0, c.followers - 1) }))
+      setError('Failed to follow. Try again.')
     } finally {
       setSaving(false)
     }
@@ -59,6 +62,7 @@ export default function ProfileFollowSection({ profileId, isMe }: ProfileFollowS
   async function handleUnfollow() {
     if (!me) return
     setSaving(true)
+    setError(null)
     setIsFollowing(false)
     setCounts((c) => ({ ...c, followers: Math.max(0, c.followers - 1) }))
     try {
@@ -66,9 +70,18 @@ export default function ProfileFollowSection({ profileId, isMe }: ProfileFollowS
     } catch {
       setIsFollowing(true)
       setCounts((c) => ({ ...c, followers: c.followers + 1 }))
+      setError('Failed to unfollow. Try again.')
     } finally {
       setSaving(false)
     }
+  }
+
+  // Only meaningful for your own profile: nobody in a followers/following
+  // list can ever be you (you can't follow yourself), so the only count
+  // that could ever change from actions taken *inside* that panel is your
+  // own following count -- and only when the panel IS your own profile's.
+  function handlePanelFollowingCountChange(delta: number) {
+    setCounts((c) => ({ ...c, following: Math.max(0, c.following + delta) }))
   }
 
   return (
@@ -90,10 +103,22 @@ export default function ProfileFollowSection({ profileId, isMe }: ProfileFollowS
           <span className="font-semibold text-base-200">{counts.following}</span> following
         </button>
         {!isMe && me && (
-          <FollowButton size="sm" isFollowing={isFollowing} saving={saving} onFollow={handleFollow} onUnfollow={handleUnfollow} />
+          // Default (md) size here, not "sm" -- this is a primary action on
+          // a spacious profile header, not a dense list row like Members.tsx
+          // or FollowListPanel, so it should get a comfortable touch target
+          // (44px+ tall) rather than the same compact sizing those use.
+          <FollowButton isFollowing={isFollowing} saving={saving} onFollow={handleFollow} onUnfollow={handleUnfollow} />
         )}
       </div>
-      {panel && <FollowListPanel userId={profileId} mode={panel} onClose={() => setPanel(null)} />}
+      {error && <p className="mt-1 text-xs text-danger">{error}</p>}
+      {panel && (
+        <FollowListPanel
+          userId={profileId}
+          mode={panel}
+          onClose={() => setPanel(null)}
+          onMyFollowingCountChange={isMe ? handlePanelFollowingCountChange : undefined}
+        />
+      )}
     </div>
   )
 }
