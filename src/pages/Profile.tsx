@@ -1,9 +1,13 @@
+import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
 import ProfileActivity from '../components/ProfileActivity'
+import ChangelogPanel from '../components/ChangelogPanel'
+import { appVersion } from '../lib/changelog'
 
 export default function Profile() {
   const { user, signOut } = useAuth()
+  const [changelogOpen, setChangelogOpen] = useState(false)
 
   return (
     <div className="mx-auto max-w-3xl px-4 pb-24 pt-6 sm:px-6 md:pb-10">
@@ -44,6 +48,17 @@ export default function Profile() {
       </div>
 
       {user && <ProfileActivity userId={user.id} username={user.username} />}
+
+      <div className="mt-12 border-t border-hairline pt-4">
+        <button
+          type="button"
+          onClick={() => setChangelogOpen((v) => !v)}
+          className="text-xs text-base-500 hover:text-base-300"
+        >
+          TV Box v{appVersion} · What&apos;s new
+        </button>
+        {changelogOpen && <ChangelogPanel onClose={() => setChangelogOpen(false)} />}
+      </div>
     </div>
   )
 }
