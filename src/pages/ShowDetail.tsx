@@ -5,6 +5,7 @@ import SeasonTabs from '../components/SeasonTabs'
 import EpisodeRow from '../components/EpisodeRow'
 import RatingSummary from '../components/RatingSummary'
 import DateMarkControl from '../components/DateMarkControl'
+import RewatchLogControl from '../components/RewatchLogControl'
 import Toast from '../components/Toast'
 import AddToListPicker from '../components/AddToListPicker'
 import ProviderPicker from '../components/ProviderPicker'
@@ -89,7 +90,6 @@ export default function ShowDetail() {
   const [watchlistItem, setWatchlistItem] = useState<WatchlistItem | null>(null)
   const [savingWatchlist, setSavingWatchlist] = useState(false)
   const [rewatches, setRewatches] = useState<ShowRewatch[]>([])
-  const [loggingRewatch, setLoggingRewatch] = useState(false)
   const [listMembership, setListMembership] = useState<Set<string>>(new Set())
   const [listPickerOpen, setListPickerOpen] = useState(false)
   const [correctedAirDates, setCorrectedAirDates] = useState<Map<string, string>>(new Map())
@@ -699,22 +699,22 @@ export default function ShowDetail() {
 
   /** Logs a rewatch -- a separate, append-only event, not a change to
    * episode_watched (which stays exactly what it's always meant: first-time
-   * progress toward "finished"). Only ever offered once a show is finished. */
-  async function handleLogRewatch() {
+   * progress toward "finished"). Only ever offered once a show is finished.
+   * rewatchedAt comes from RewatchLogControl's confirm step, not straight
+   * from a click handler -- see that component for why. */
+  async function handleLogRewatch(rewatchedAt: string) {
     if (!user || !show) return
-    setLoggingRewatch(true)
     try {
       const saved = await logRewatch({
         userId: user.id,
         showId: show.id,
         showName: show.name,
         showPosterPath: show.poster_path,
+        rewatchedAt,
       })
       setRewatches((prev) => [saved, ...prev])
     } catch {
       showError('Failed to log this rewatch. Try again.')
-    } finally {
-      setLoggingRewatch(false)
     }
   }
 
@@ -1033,18 +1033,7 @@ export default function ShowDetail() {
                 the show is actually finished. */}
             {watchedCount >= totalEpisodes && (
               <div className="mt-2">
-                <button
-                  type="button"
-                  onClick={handleLogRewatch}
-                  disabled={loggingRewatch}
-                  className="text-xs text-accent-400 hover:underline disabled:opacity-60"
-                >
-                  {loggingRewatch
-                    ? 'Logging…'
-                    : rewatches.length > 0
-                      ? `Log another rewatch (${rewatches.length} so far)`
-                      : 'Log a rewatch'}
-                </button>
+                <RewatchLogControl count={rewatches.length} onConfirm={handleLogRewatch} />
                 {rewatches.length > 0 && (
                   <ul className="mt-1.5 flex flex-wrap gap-1.5">
                     {rewatches.map((r) => (

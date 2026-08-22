@@ -30,6 +30,10 @@ export interface LogRewatchInput {
   showId: number
   showName: string
   showPosterPath: string | null
+  /** Caller-chosen, like bulkMarkWatched's watchedAt -- defaults to "now" at
+   * the call site (RewatchLogControl), but letting it be backdated means a
+   * rewatch you finished last week doesn't have to be logged as today. */
+  rewatchedAt: string
 }
 
 /** Logs one rewatch event. Unlike everything else in this app, this is a
@@ -43,7 +47,7 @@ export async function logRewatch(input: LogRewatchInput): Promise<ShowRewatch> {
       show_id: input.showId,
       show_name: input.showName,
       show_poster_path: input.showPosterPath,
-      rewatched_at: new Date().toISOString(),
+      rewatched_at: input.rewatchedAt,
     })
     .select()
     .single()
