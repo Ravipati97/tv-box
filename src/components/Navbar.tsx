@@ -3,6 +3,7 @@ import { AnimatePresence, motion } from 'framer-motion'
 import { useTheme } from '../contexts/ThemeContext'
 import { scrollBehavior } from '../lib/motion'
 import AppLogo from './AppLogo'
+import ReportBugButton from './ReportBugButton'
 
 const linkBase =
   'relative flex flex-col items-center justify-center gap-0.5 text-[11px] font-medium transition-colors duration-200 md:flex-row md:gap-1.5 md:text-sm md:px-3.5 md:py-1.5 md:rounded-full'
@@ -210,6 +211,7 @@ export default function Navbar() {
                 </NavLink>
               ))}
             </nav>
+            <ReportBugButton />
             <ThemeToggle />
           </div>
         </div>
